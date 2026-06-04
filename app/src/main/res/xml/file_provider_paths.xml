@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- QR images live in the app's internal cache and are exposed via
+         FileProvider for Intent.ACTION_SEND. No long-term persistence here —
+         the cache directory is cleared by Android when space is low. -->
+    <cache-path name="qr" path="qr/" />
+</paths>

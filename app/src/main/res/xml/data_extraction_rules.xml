@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup + device-transfer rules for API 31+ (data-extraction-rules schema).
+
+    Same intent as backup_rules.xml: keep DataStore + Room backed up, but
+    exclude the Keystore-encrypted prefs file. Restoring encrypted content
+    onto a fresh device whose Keystore doesn't have the original alias is
+    guaranteed to fail at decrypt time (AEADBadTagException), which we'd
+    then have to self-heal by clearing the prefs anyway.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="grace_secure_prefs.xml"/>
+        <exclude domain="file" path="grace_secure_prefs.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="grace_secure_prefs.xml"/>
+        <exclude domain="file" path="grace_secure_prefs.xml"/>
+    </device-transfer>
+</data-extraction-rules>

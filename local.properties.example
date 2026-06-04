@@ -1,0 +1,86 @@
+# ---------------------------------------------------------------------------
+# local.properties.example
+# Copy this file to `local.properties` and fill in real values. NEVER commit
+# the real local.properties — it's git-ignored for a reason.
+# ---------------------------------------------------------------------------
+
+# Android SDK location. Android Studio fills this in automatically the first
+# time you open the project; you don't need to edit it manually.
+sdk.dir=/path/to/your/Android/sdk
+
+# ---------------------------------------------------------------------------
+# GRACE / Royals secrets — required for the app to build + run
+# ---------------------------------------------------------------------------
+
+# Supabase project URL — find at https://supabase.com/dashboard/project/<ref>
+# Looks like: https://<your-project-ref>.supabase.co
+SUPABASE_URL=https://your-project-ref.supabase.co
+
+# Supabase anon (public) key — Settings → API → anon public.
+# Safe to embed in the APK; RLS policies are the real security boundary.
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# ESV / NKJV Bible API key (free tier at https://api.esv.org).
+# Used by DevotionalRepository.fetchAndCacheVerse for the offline verse cache.
+# Leave blank to disable (the app falls back to a curated catalogue).
+BIBLE_API_KEY=Token your-bible-api-key-here
+
+# Google OAuth Web Client ID — for One Tap sign-in via the native Credential
+# Manager. Created in Google Cloud Console → Credentials → OAuth 2.0 → "Web"
+# client. The SAME id must be configured in Supabase Dashboard → Auth →
+# Providers → Google → Web Client IDs.
+# Leave blank to disable Google sign-in (email/password still works).
+GOOGLE_WEB_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
+
+# ---------------------------------------------------------------------------
+# RELEASE SIGNING (only needed to build a signed APK / AAB for distribution)
+# ---------------------------------------------------------------------------
+# Leave these four params BLANK and `./gradlew assembleRelease` produces an
+# unsigned APK (useful for CI without secrets). Set all four to enable the
+# signing config in app/build.gradle.kts.
+#
+# To generate a keystore (one-time, from the project root):
+#
+#   keytool -genkey -v \
+#     -keystore royals-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 \
+#     -alias royals-release
+#
+# CRITICAL: back up the .jks file off-machine somewhere safe (Google Drive,
+# a USB stick, a password manager attachment). LOSING IT MEANS YOU CAN NEVER
+# UPDATE THE APP — Play Store / sideload installs verify signatures, and a
+# new keystore = a new "different app".
+
+# Path to the keystore file, RELATIVE to the project root.
+# E.g. `royals-release.jks` if it lives next to settings.gradle.kts.
+RELEASE_KEYSTORE_PATH=
+
+# Keystore password (what you typed during `keytool -genkey`).
+RELEASE_KEYSTORE_PASSWORD=
+
+# Key alias inside the keystore (the `-alias royals-release` part above).
+RELEASE_KEY_ALIAS=
+
+# Key password (often the same as the keystore password; `keytool` asks
+# during generation).
+RELEASE_KEY_PASSWORD=
+
+# ---------------------------------------------------------------------------
+# Additional setup steps (not in this file):
+#
+# 1. Place your Firebase project's google-services.json in:
+#       app/google-services.json
+#    Download from: Firebase Console → Project Settings → General →
+#    "Your apps" → Android app → google-services.json
+#    This file is git-ignored — each developer uses their own Firebase project
+#    (or shares one project's file out-of-band).
+#
+# 2. Run the SQL migrations in supabase/ against your Supabase project,
+#    in the order they're named (schema.sql first, then feature-*.sql,
+#    then security-*.sql, in numerical order where present).
+#
+# 3. Deploy the Edge Functions in supabase/functions/ via:
+#       supabase functions deploy <function-name>
+#    Most need `--no-verify-jwt` (notify-* + welcome-on-checkin). The
+#    `delete-account` function does NOT use that flag.
+# ---------------------------------------------------------------------------

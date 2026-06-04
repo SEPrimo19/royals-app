@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Royals (internal: GRACE) — git ignore
+# ---------------------------------------------------------------------------
+
+# --- Android / Gradle ---
+*.iml
+.gradle
+/build
+/captures
+.externalNativeBuild
+.cxx
+/app/build
+/app/release
+/app/debug
+
+# --- IDE noise ---
+/.idea
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.vscode/
+.DS_Store
+*.swp
+
+# --- SECRETS — never commit ---
+# Project-local config + secrets (Supabase keys, Bible API key, OAuth client).
+local.properties
+/local.properties
+# Firebase project config — contains project id + restricted keys. Keep out
+# of the repo; devs add their own. See local.properties.example for setup.
+google-services.json
+app/google-services.json
+# Signing keystores — losing these = can never update the app on Play Store.
+# NEVER commit. Back up off-machine somewhere safe.
+*.jks
+*.keystore
+*.p12
+*.pfx
+# Generic key / env files in case anyone adds them later.
+*.pem
+*.key
+.env
+.env.*
+# Service-account JSON (Firebase Admin SDK, GCP, etc.).
+*service-account*.json
+*serviceAccount*.json
+
+# --- Logs (from adb logcat etc.) ---
+# `.log` catches grace.log; `.log~` catches editor backup files; `.logcat`
+# catches the JSON dumps from Android Studio's Logcat → Save action.
+*.log
+*.log~
+*.logcat
+grace.log
+LOGCAT.logcat
+
+# --- Build outputs not auto-ignored ---
+/release
+*.apk
+*.aab
+*.aar
+
+# --- Crashlytics symbol uploads (auto-regenerated) ---
+/app/src/*/release/crashlytics-build.properties
+
+# --- Supabase CLI scratch space (project ref + DB connection URL) ---
+# These auto-regenerate the next time you run `supabase link`. Safe to gitignore.
+supabase/.temp/
+supabase/.branches/
+
+# --- Personal planning / scratchpad files (not for the public repo) ---
+# Roadmap brainstorm + AI-assistant project context. Keep these as local
+# reference; don't publish them on GitHub.
+/AppFeatures
+/CLAUDE.md
+
+# --- Brand source assets (logos, design files) ---
+# Kept local as the original brand-design materials for the ministry.
+/asset/
+
+# --- Brand logo files inside the app — also excluded from the repo ---
+# These files MUST exist on the LOCAL filesystem for the app to build
+# (they're referenced by adaptive icon XMLs, the notification icon, and
+# Login/SignUp/PdfExporter Kotlin). They're git-ignored so the brand
+# imagery doesn't ship to GitHub. Anyone cloning the repo to build must
+# provide their own logo files at these exact paths (see README for
+# the list of required filenames).
+app/src/main/assets/logo.png
+app/src/main/assets/footer.png
+app/src/main/assets/background.png
+app/src/main/assets/royals_logo.png
+app/src/main/assets/royals_logo_official.png
+app/src/main/res/drawable/royals_logo.jpg
+app/src/main/res/drawable/royals_logo_official.png

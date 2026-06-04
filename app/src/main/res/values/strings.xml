@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Royals</string>
+
+    <!-- Notification channels -->
+    <string name="channel_prayer_name">Prayer Wall</string>
+    <string name="channel_prayer_desc">New prayer requests and intercession activity</string>
+    <string name="channel_devotional_name">Daily Devotional</string>
+    <string name="channel_devotional_desc">Your daily devotional reminder</string>
+    <string name="channel_messages_name">Leader Messages</string>
+    <string name="channel_messages_desc">Private messages from your leader</string>
+    <string name="channel_community_name">Community</string>
+    <string name="channel_community_desc">Life feed highlights and announcements</string>
+
+    <!-- Connectivity -->
+    <string name="offline_banner">📡 You\'re offline — some features may be limited</string>
+
+    <!-- Reminder notifications -->
+    <string name="prayer_reminder_title">🙏 A moment to pray</string>
+    <string name="prayer_reminder_body">Pause and lift up your week. Tap to open the Prayer Wall.</string>
+    <string name="devo_reminder_title">📖 Today\'s devotional is waiting</string>
+    <string name="devo_reminder_body">A few quiet minutes with God. Tap to begin.</string>
+
+    <!-- Event reminders -->
+    <string name="event_reminder_title">📅 Coming up: %1$s</string>
+    <string name="event_reminder_body">Starts at %1$s · %2$s</string>
+    <string name="event_reminder_body_no_location">Starts at %1$s</string>
+</resources>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher icon background. Solid white — the Royals crest itself has a
+  green ring on a white inner field, so a white launcher background
+  visually extends the logo's inner color, producing one continuous
+  "white circle / squircle / square with the full crest centered on it"
+  regardless of which mask the launcher applies.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/white" />
+</shape>

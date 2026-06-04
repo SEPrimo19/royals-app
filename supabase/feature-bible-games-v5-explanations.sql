@@ -1,0 +1,127 @@
+-- =============================================================================
+-- GRACE — Bible Games v5: backfill `explanation` on every seeded question.
+--
+-- The original seed (feature-bible-games.sql) + v2 expansion never wrote the
+-- `explanation` column, so the reveal card after each answer was empty. This
+-- migration sets a 1-sentence "why the correct answer is right" for every
+-- existing seeded question. Match is by exact question text.
+--
+-- Safe to re-run: each UPDATE only fires when explanation is currently NULL
+-- or blank, so later leader edits via the Curate Questions screen are not
+-- overwritten.
+-- =============================================================================
+
+DO $$
+DECLARE
+  rec RECORD;
+BEGIN
+  FOR rec IN
+    SELECT * FROM (VALUES
+      -- ---- v1 seed (20) -----------------------------------------------------
+      ('Who built an ark to survive the great flood?',
+       'God commanded Noah to build the ark to preserve his family and the animals through the flood (Genesis 6:13-22).'),
+      ('Who led the Israelites out of Egypt?',
+       'God called Moses to lead Israel out of Egypt; he stretched out his staff and the Red Sea parted (Exodus 14:21-22).'),
+      ('Who defeated Goliath with a sling and a stone?',
+       'Young David trusted the Lord and felled the Philistine giant with a single sling-stone (1 Samuel 17:49-50).'),
+      ('In how many days did God create the world before resting?',
+       'Genesis 1-2 records six days of creation; on the seventh day God rested and blessed it as the Sabbath.'),
+      ('What was the name of Moses’ brother who became the first high priest?',
+       'Aaron, Moses’ older brother, was set apart as Israel’s first high priest (Exodus 28:1).'),
+      ('How many years did the Israelites wander in the wilderness?',
+       'After Israel’s unbelief at Kadesh, God decreed forty years of wandering — one year for each day the spies explored the land (Numbers 14:33-34).'),
+      ('Which prophet was taken up to heaven in a whirlwind by a chariot of fire?',
+       'Elijah did not die — God took him up alive in a whirlwind by a chariot of fire, while Elisha watched (2 Kings 2:11).'),
+      ('In which town was Jesus born?',
+       'Joseph and Mary travelled to Bethlehem for the census, fulfilling Micah’s prophecy that Messiah would be born there (Luke 2:4-7; Micah 5:2).'),
+      ('Who baptized Jesus in the Jordan River?',
+       'John the Baptist baptized Jesus in the Jordan, and the Spirit descended on Him like a dove (Matthew 3:13-17).'),
+      ('How many disciples did Jesus choose?',
+       'Jesus chose twelve apostles, paralleling the twelve tribes of Israel (Matthew 10:1-4).'),
+      ('At which wedding did Jesus perform His first recorded miracle?',
+       'At a wedding in Cana of Galilee, Jesus turned water into wine — the first of His signs (John 2:1-11).'),
+      ('Who wrote most of the New Testament epistles?',
+       'Paul wrote at least 13 of the 27 New Testament books — more than any other author (Romans through Philemon).'),
+      ('Which book follows the Gospels and records the early church?',
+       'Acts continues Luke’s account, recording how the gospel spread from Jerusalem to Rome (Acts 1:1-8).'),
+      ('How many days did Jesus appear to His disciples after the resurrection before ascending?',
+       'Luke records that Jesus showed Himself alive over forty days, speaking of the kingdom (Acts 1:3).'),
+      ('Which young shepherd became the second king of Israel?',
+       'God sent Samuel to anoint David, the youngest son of Jesse, as Saul’s successor (1 Samuel 16:11-13).'),
+      ('Who was thrown into a den of lions but unharmed?',
+       'Daniel was cast to the lions for praying to God; the Lord shut the lions’ mouths and Daniel emerged unharmed (Daniel 6:22).'),
+      ('Which woman hid Israelite spies in Jericho?',
+       'Rahab hid the two spies on her roof and was spared when Jericho fell — later joining the line of Christ (Joshua 2; Matthew 1:5).'),
+      ('Who became queen of Persia and saved her people from genocide?',
+       'Esther risked her life to expose Haman’s plot, and God used her to deliver the Jews (Esther 7:1-6).'),
+      ('Which apostle was originally named Saul of Tarsus before his conversion?',
+       'Saul of Tarsus persecuted Christians until Jesus appeared to him on the road to Damascus; he became known as Paul (Acts 9:1-19; 13:9).'),
+      ('Who was the father of John the Baptist?',
+       'The angel Gabriel told the priest Zacharias and his wife Elizabeth they would have a son to be named John (Luke 1:5-13).'),
+
+      -- ---- v2 seed (24) -----------------------------------------------------
+      ('Who built the first temple in Jerusalem?',
+       'David desired to build the temple, but God gave the task to his son Solomon, who completed it (1 Kings 6:14).'),
+      ('Who was Adam''s wife?',
+       'God formed Eve from Adam’s rib to be his suitable companion (Genesis 2:22).'),
+      ('What instrument did David play to soothe King Saul?',
+       'When an evil spirit troubled Saul, David played the harp and Saul was refreshed (1 Samuel 16:23).'),
+      ('What did Jesus turn water into at the wedding in Cana?',
+       'Jesus turned six stone waterpots of water into the finest wine — His first miraculous sign (John 2:9-10).'),
+      ('How many books are in the Bible?',
+       'The Protestant Bible contains 66 books — 39 in the Old Testament and 27 in the New Testament.'),
+      ('Who wrote the book of Revelation?',
+       'The apostle John received the revelation on the island of Patmos and wrote it down (Revelation 1:1, 9).'),
+      ('What were the first three words of the Bible?',
+       'Scripture opens with: “In the beginning God created the heavens and the earth” (Genesis 1:1).'),
+      ('Who was the first murderer in the Bible?',
+       'Cain killed his brother Abel out of jealousy when God accepted Abel’s offering (Genesis 4:8).'),
+      ('Who was the father of Isaac?',
+       'Abraham was 100 years old when Sarah bore him Isaac, the child of promise (Genesis 21:5).'),
+      ('How many plagues did God send on Egypt?',
+       'God sent ten plagues on Egypt, culminating in the death of the firstborn, to compel Pharaoh to release Israel (Exodus 7-12).'),
+      ('Who was sold into slavery by his brothers?',
+       'Joseph’s brothers, jealous of his dreams, sold him for twenty pieces of silver to Ishmaelite traders (Genesis 37:28).'),
+      ('Who was the strongest man in the Bible?',
+       'Samson’s strength came from his Nazirite vow; he killed a lion bare-handed and brought down a Philistine temple (Judges 14-16).'),
+      ('Who replaced Judas Iscariot among the apostles?',
+       'The eleven apostles cast lots, and the lot fell on Matthias to take Judas’s place (Acts 1:26).'),
+      ('Where did Jesus give the Sermon on the Mount?',
+       'Seeing the multitudes, Jesus went up on a mountainside, sat down, and taught His disciples (Matthew 5:1).'),
+      ('Which apostle walked on water (briefly) toward Jesus?',
+       'Peter stepped out of the boat and walked on the water toward Jesus, but began to sink when he saw the wind (Matthew 14:29-30).'),
+      ('Who was the first king of Israel?',
+       'Samuel anointed Saul as Israel’s first king, at the people’s demand for a king like the nations (1 Samuel 10:1).'),
+      ('Which woman became David''s great-grandmother through marriage to Boaz?',
+       'Ruth the Moabitess married Boaz; their son Obed fathered Jesse, the father of David (Ruth 4:13-22).'),
+      ('How many books are in the Old Testament?',
+       'The Protestant Old Testament has 39 books — the same Hebrew Scriptures Jesus and the apostles used.'),
+      ('How old was Moses when he died?',
+       'Moses died on Mount Nebo at 120 years old, his eyes undimmed and his strength unabated (Deuteronomy 34:7).'),
+      ('Which prophet was swallowed by a great fish?',
+       'Jonah fled God’s call to Nineveh; a great fish swallowed him and he was inside three days and three nights (Jonah 1:17).'),
+      ('Who wrote the book of Acts?',
+       'Luke addresses Acts to Theophilus as a continuation of his Gospel — both written by the physician Luke (Acts 1:1; Luke 1:3).'),
+      ('Which apostle is called "the beloved disciple"?',
+       'John refers to himself in his Gospel as “the disciple whom Jesus loved” (John 13:23; 21:20).'),
+      ('Who was the king of Judea when Jesus was born?',
+       'Herod the Great ruled Judea when the Magi came seeking the newborn King; he later ordered the slaughter at Bethlehem (Matthew 2:1-18).'),
+      ('What was the name of Abraham''s nephew who lived in Sodom?',
+       'Abraham’s nephew Lot chose the well-watered Jordan plain and settled near Sodom (Genesis 13:12).'),
+      ('Who was the mother of Samuel the prophet?',
+       'Hannah, barren and grieving, vowed to give her son to God; the Lord answered with Samuel (1 Samuel 1:20).')
+    ) AS t(q, e)
+  LOOP
+    UPDATE bible_questions
+       SET explanation = rec.e
+     WHERE question = rec.q
+       AND (explanation IS NULL OR btrim(explanation) = '');
+  END LOOP;
+END $$;
+
+-- Sanity check (run manually):
+--   SELECT count(*) FILTER (WHERE explanation IS NULL OR btrim(explanation)='') AS missing,
+--          count(*) AS total
+--     FROM bible_questions;
+-- Should show: missing = 0 (or only counts any leader-added rows that haven't
+-- been given an explanation yet).

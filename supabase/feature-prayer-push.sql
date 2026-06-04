@@ -1,0 +1,56 @@
+-- ============================================================
+-- Phase 6c: Prayer-posted push notification
+--
+-- This feature is wired entirely through a **Database Webhook** in the
+-- Supabase Dashboard — no Postgres trigger or pg_net call needed. The
+-- webhook handles auth + URL automatically, so the service role key
+-- never appears in any SQL file or trigger function.
+--
+-- There is NOTHING TO RUN in this file. It exists as documentation only.
+--
+-- (Why no SQL trigger? Hosted Supabase blocks `ALTER DATABASE SET` for
+--  custom GUCs from the `postgres` role, so the previous pg_net-based
+--  pattern can't read its config. Database Webhooks are the official
+--  Supabase replacement and remove the secret-management headache.)
+-- ============================================================
+--
+-- DEPLOYMENT (do once, in this order):
+--
+-- 1. Deploy the Edge Function:
+--      supabase functions deploy notify-prayer-posted
+--
+-- 2. Set the Firebase service-account secret on the function
+--    (download from Firebase Console → Project Settings →
+--     Service Accounts → "Generate new private key"):
+--      supabase secrets set FCM_SERVICE_ACCOUNT_JSON="$(cat firebase-adminsdk.json)"
+--
+-- 3. Create the webhook in the Supabase Dashboard:
+--      Database → Webhooks → Create a new hook
+--        Name:           notify_prayer_posted
+--        Table:          prayers
+--        Events:         ✔ Insert  (leave Update / Delete unchecked)
+--        Type:           Supabase Edge Functions
+--        Edge Function:  notify-prayer-posted
+--        Method:         POST
+--        HTTP Headers:   (none — Supabase auto-injects auth)
+--      Save.
+--
+-- 4. Test: sign in on two devices with two different accounts. Open
+--    the app on device B at least once so its fcm_token is registered
+--    in users.fcm_token. Post a prayer from device A. Device B should
+--    receive the push within ~5 seconds.
+--
+--    If nothing arrives, check, in order:
+--      - Webhook history:  Dashboard → Database → Webhooks → click the hook
+--                          → "Recent calls" tab shows status code + response
+--      - Function logs:    supabase functions logs notify-prayer-posted --tail
+--      - Tokens persisted: SELECT id, name, fcm_token IS NOT NULL FROM users;
+--
+-- ============================================================
+-- The Edge Function (supabase/functions/notify-prayer-posted/index.ts)
+-- accepts the standard Database Webhook payload shape:
+--   { type: "INSERT", table: "prayers", schema: "public",
+--     record: { id, user_id, content, is_anonymous, ... }, old_record: null }
+-- It resolves the poster's display name itself via service role, so no
+-- pre-join is required.
+-- ============================================================

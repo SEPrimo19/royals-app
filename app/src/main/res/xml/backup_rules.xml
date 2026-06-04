@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto-backup rules for API 23–30 (full-backup-content schema).
+
+    Excludes our Keystore-encrypted SharedPreferences and the encrypted
+    Bible Tink keyset file. The encrypted contents are useless on a fresh
+    install because the Android Keystore alias used to encrypt them lives
+    OUTSIDE the backup — restoring them just produces AEADBadTagException
+    on first read. Everything else (DataStore, Room cache) is fine to
+    back up since it's plain data.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="grace_secure_prefs.xml"/>
+    <exclude domain="file" path="grace_secure_prefs.xml"/>
+</full-backup-content>
