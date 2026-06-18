@@ -1,14 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Adaptive icon foreground. 14dp inset on each side puts the Royals
-  crest at ~80dp diameter inside the 108dp canvas. Paired with the
-  white background, the visible icon reads as a single "white circle
-  with the full crest centered on it" on any launcher mask, with no
-  clipping of the "KINGDOM BUILDERS" text ring.
 
-  Audit-item #9: now references royals_logo.jpg (the file the user
-  named) instead of the previous royals_logo_official.png.
--->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:insetLeft="14dp"
     android:insetTop="14dp"

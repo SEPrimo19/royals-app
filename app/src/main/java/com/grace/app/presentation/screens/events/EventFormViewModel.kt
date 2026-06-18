@@ -28,17 +28,11 @@ data class EventFormUiState(
     val title: String = "",
     val description: String = "",
     val date: LocalDate = LocalDate.now().plusDays(1),
-    val time: LocalTime = LocalTime.of(19, 0), // 7pm default — common church evening
-    // Optional end time. When null the legacy "+2h after start" window
-    // applies. We default it to start+2h on the UI to give creators a sane
-    // visible starting point they can adjust or clear.
+    val time: LocalTime = LocalTime.of(19, 0),
     val endDate: LocalDate? = LocalDate.now().plusDays(1),
     val endTime: LocalTime? = LocalTime.of(21, 0),
     val location: String = "",
     val isRecurring: Boolean = false,
-    // When false the event becomes an info-only reminder: no QR, no
-    // check-in, no attendance tracking. Defaults to true (most events
-    // are real events you want to track).
     val requiresAttendance: Boolean = true,
     val error: String? = null
 ) {
@@ -83,7 +77,6 @@ class EventFormViewModel @Inject constructor(
     private val updateEventUseCase: UpdateEventUseCase
 ) : ViewModel() {
 
-    // Nav arg is optional — "new" route passes the string "new"; edit passes uuid.
     private val eventId: String? =
         savedStateHandle.get<String>("eventId")?.takeIf { it != "new" }
 
@@ -134,9 +127,6 @@ class EventFormViewModel @Inject constructor(
                 _uiState.update { it.copy(description = event.value) }
             is EventFormEvent.DateChanged ->
                 _uiState.update {
-                    // Keep end date in sync if the user hasn't customized it
-                    // (still matches old start date). Cuts a step for the
-                    // common "event spans the same day" case.
                     val keepEndInSync = it.endDate == it.date
                     it.copy(
                         date = event.value,
@@ -145,8 +135,6 @@ class EventFormViewModel @Inject constructor(
                 }
             is EventFormEvent.TimeChanged ->
                 _uiState.update {
-                    // Bump default end time 2h forward when the user
-                    // hasn't customized it (it still equals start+2h).
                     val defaultEnd = it.time.plusHours(2)
                     val keepEndInSync = it.endTime != null &&
                         it.endTime == defaultEnd
@@ -177,9 +165,6 @@ class EventFormViewModel @Inject constructor(
         if (!s.canSave) return
         _uiState.update { it.copy(isSaving = true, error = null) }
         viewModelScope.launch {
-            // Handle create / update separately — avoids an unchecked cast
-            // from Result<Event> to Result<Unit>. Both paths share the same
-            // success/error tail below.
             val message: String? = if (eventId == null) {
                 when (val r = createEventUseCase(
                     title = s.title,

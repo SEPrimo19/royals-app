@@ -11,20 +11,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +57,7 @@ import com.grace.app.presentation.theme.GraceRose
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenDevotional: () -> Unit,
@@ -56,19 +68,44 @@ fun HomeScreen(
     onOpenEvents: () -> Unit,
     onOpenCommunity: () -> Unit = {},
     onOpenGames: () -> Unit = {},
+    onOpenDiscipleship: () -> Unit = {},
+    onOpenBible: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val today = formattedToday()
 
-    // Re-pull server-backed sections on each screen entry (the VM persists
-    // across bottom-bar tabs, so init only fires once).
+    val notesViewModel: com.grace.app.presentation.components.NotesBarViewModel =
+        hiltViewModel()
+    val challengeViewModel: com.grace.app.presentation.components.DailyChallengeViewModel =
+        hiltViewModel()
+
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refresh() }
 
-    Column(
+    val pullState = rememberPullToRefreshState()
+    if (pullState.isRefreshing) {
+        androidx.compose.runtime.LaunchedEffect(true) {
+            viewModel.refresh()
+            notesViewModel.onEvent(
+                com.grace.app.presentation.components.NotesBarEvent.Refresh
+            )
+            challengeViewModel.onEvent(
+                com.grace.app.presentation.components.DailyChallengeEvent.Refresh
+            )
+            kotlinx.coroutines.delay(1200)
+            pullState.endRefresh()
+        }
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(GraceDeepBlue)
+            .nestedScroll(pullState.nestedScrollConnection)
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
@@ -91,8 +128,6 @@ fun HomeScreen(
                 )
                 Text(today, color = GraceCreamDim, fontSize = 13.sp)
             }
-            // Hide the streak badge entirely for users at 0 — an empty 🔥 reads
-            // as a failure state, the opposite of the intent.
             if (state.streak > 0) {
                 Box(
                     modifier = Modifier
@@ -110,6 +145,62 @@ fun HomeScreen(
                 Icon(Icons.Filled.Menu, "Menu", tint = GraceCreamDim)
             }
         }
+
+        AnimatedVisibility(
+            visible = !state.isOnline,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "📡 You're offline — showing saved data",
+                    color = GraceCreamDim,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            com.grace.app.presentation.theme.GraceMuted.copy(alpha = 0.35f),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = state.isOnline && state.justCameOnline,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "✓ Back online — refreshing your feed",
+                    color = GraceGreen,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            GraceGreen.copy(alpha = 0.15f),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        com.grace.app.presentation.components.UpdateBanner()
+
+        Spacer(Modifier.height(18.dp))
+        com.grace.app.presentation.components.NotesBar()
+
+        Spacer(Modifier.height(18.dp))
+        com.grace.app.presentation.components.DailyChallengeCard(
+            onOpenLibrary = onOpenDiscipleship
+        )
 
         Spacer(Modifier.height(20.dp))
         Card(
@@ -161,9 +252,43 @@ fun HomeScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        // Community Hub gets top billing below the devotional — it's the
-        // user's personal-progress doorway (attendance, journal, life group)
-        // and used to live buried inside Settings. Now it's one tap away.
+        Card(
+            colors = CardDefaults.cardColors(containerColor = GraceCardAlt),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenBible() }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("HOLY BIBLE · KJV", color = GraceGold, fontSize = 10.sp,
+                        letterSpacing = 3.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Read the Word", color = GraceCream, fontSize = 20.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "All 66 books · available offline",
+                        color = GraceCreamDim, fontSize = 13.sp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            GraceGold.copy(alpha = 0.18f),
+                            RoundedCornerShape(50)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("📖", fontSize = 26.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         QuickAction(
             "🏘️", "Community",
             "Life Group · Content · Progress · Journal",
@@ -187,10 +312,6 @@ fun HomeScreen(
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Bible Games full-width — flagship feature deserves visual
-            // weight on Home. Solo row so it doesn't get lost. The
-            // subtitle upgrades from a generic CTA to "🔥 N day streak"
-            // once the user has actually played the daily round.
             val gameSubtitle = if (state.gameStreak > 0)
                 "🔥 ${state.gameStreak} day streak · keep it alive"
             else
@@ -233,6 +354,16 @@ fun HomeScreen(
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (pullState.verticalOffset > 0.5f || pullState.isRefreshing) {
+        PullToRefreshContainer(
+            state = pullState,
+            modifier = Modifier.align(Alignment.TopCenter),
+            containerColor = GraceCardBg,
+            contentColor = GraceGold
+        )
+    }
     }
 }
 

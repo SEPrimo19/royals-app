@@ -55,8 +55,6 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// Which picker is currently open. Drives a single shared DatePickerDialog
-// / TimePickerDialog so we don't duplicate dialog setup for start vs end.
 private enum class PickerTarget { START_DATE, START_TIME, END_DATE, END_TIME }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +67,6 @@ fun EventFormScreen(
     var toast by remember { mutableStateOf<String?>(null) }
     var activePicker by remember { mutableStateOf<PickerTarget?>(null) }
 
-    // Auto-dismiss toasts after 2.5s so they don't linger.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -149,10 +146,6 @@ fun EventFormScreen(
             }
 
             Spacer(Modifier.height(14.dp))
-            // The "ENDS" row controls when check-in closes. If the user
-            // clears it, the legacy "+2h after start" window applies
-            // server-side. We surface that hint inline so the behavior
-            // isn't a mystery.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "ENDS",
@@ -195,8 +188,6 @@ fun EventFormScreen(
                         label = "+ Add end time",
                         modifier = Modifier.weight(1f)
                     ) {
-                        // Re-add a default end so the pickers reappear. Uses
-                        // start+2h, the same default we apply on first open.
                         viewModel.onEvent(
                             EventFormEvent.EndDateChanged(state.date)
                         )
@@ -238,9 +229,6 @@ fun EventFormScreen(
             )
 
             Spacer(Modifier.height(14.dp))
-            // Attendance toggle. Off = pure announcement (Sunday Service
-            // type events). When off, the QR card disappears from the
-            // events list and any check-in attempt is rejected server-side.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -313,7 +301,6 @@ fun EventFormScreen(
         }
     }
 
-    // ---- Shared pickers ------------------------------------------------
     if (activePicker == PickerTarget.START_DATE ||
         activePicker == PickerTarget.END_DATE
     ) {

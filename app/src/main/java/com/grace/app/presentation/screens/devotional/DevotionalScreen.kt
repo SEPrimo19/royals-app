@@ -58,15 +58,6 @@ import com.grace.app.presentation.theme.GraceRose
 
 private val stepLabels = listOf("Scripture", "Reflection", "Prayer", "Journal")
 
-/**
- * Top-level tab for the Devotional screen. Daily devotional (existing) is
- * the default; This Week's Meditation is the new tab. Both share the same
- * dark background and screen chrome — only the body switches.
- *
- * Tab state lives in [remember] (NOT in DataStore) — opening the screen
- * always returns to Devotional. Persisting last-tab would surprise users
- * who think of the tab as their daily entry point.
- */
 private enum class DevoTab { DEVOTIONAL, MEDITATION }
 
 @Composable
@@ -83,8 +74,6 @@ fun DevotionalScreen(
             .fillMaxSize()
             .background(GraceDeepBlue)
     ) {
-        // MenuButtonRow sits at the bare screen edge — its 16dp-from-edge
-        // contract already accounts for IconButton's internal padding.
         MenuButtonRow(onOpenMenu)
         DevoTabSwitcher(active = activeTab, onChange = { activeTab = it })
         Box(modifier = Modifier.fillMaxSize()) {
@@ -232,8 +221,6 @@ private fun DevotionalContent(
         }
 
         Spacer(Modifier.height(16.dp))
-        // Horizontally scrollable so the four pills never get squeezed — that
-        // squeeze was what wrapped "Journal" one letter per line.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -295,9 +282,6 @@ private fun StepPill(label: String, state: PillState, onClick: () -> Unit) {
         PillState.CURRENT -> GraceGold to GraceDeepBlue
         PillState.FUTURE -> GraceCardBg to GraceMuted
     }
-    // Plain clickable pill — no TextButton wrapper (its min-width was part of
-    // what overflowed the row). maxLines + softWrap=false guarantees the label
-    // stays on one line.
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
@@ -361,9 +345,6 @@ private fun TextStep(
         colors = CardDefaults.cardColors(containerColor = GraceCardBg),
         modifier = Modifier
             .fillMaxWidth()
-            // Min-height keeps the card visually present even if the body
-            // text is brief — without this, a short prompt looked clipped
-            // because the card hugged 1-2 lines tight against the screen.
             .heightIn(min = 180.dp)
     ) {
         Text(
@@ -403,11 +384,9 @@ private fun JournalStep(
     Spacer(Modifier.height(12.dp))
 
     if (state.isDone) {
-        // Re-reading an already-completed devotional. The journal is encrypted
-        // and not re-loaded here; completion stays intact — no re-marking.
         Text(
-            "✓ You've already completed this devotional. Your journal is saved " +
-                "privately on your device.",
+            "✓ You've already completed this devotional. Your journal is private " +
+                "to you and backed up to your account.",
             color = GraceGreen,
             fontSize = 14.sp
         )
@@ -484,7 +463,6 @@ private fun CompletionState(
             Spacer(Modifier.height(28.dp))
             GraceButton(text = "Back to Home", onClick = onBackToHome)
             Spacer(Modifier.height(10.dp))
-            // Re-read keeps the devotional 100% complete — see DevotionalUiState.
             TextButton(onClick = onReadAgain) {
                 Text("Read Again", color = GraceGold)
             }

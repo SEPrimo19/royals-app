@@ -1,16 +1,8 @@
-// Resend HTTP API helper. Used by send-bulk-email (broadcast) and
-// welcome-on-checkin (personalized per attendee).
-//
-// Env vars (lazy, only read when sending — keeps imports safe in dev):
-//   RESEND_API_KEY    — re_... key from resend.com/api-keys
-//   BULK_EMAIL_FROM   — "GRACE Youth <youth@yourchurch.org>" or onboarding@resend.dev
 
 type SendArgs = {
   to: string;
   subject: string;
   html: string;
-  // Optional override for the "From" — defaults to BULK_EMAIL_FROM env. Useful
-  // if a future feature wants a different sender per email type.
   from?: string;
 };
 
@@ -52,7 +44,6 @@ export async function sendResendEmail(args: SendArgs): Promise<boolean> {
   }
 }
 
-/** HTML escape — keep this in sync with send-bulk-email's local copy. */
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

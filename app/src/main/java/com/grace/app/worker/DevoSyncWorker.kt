@@ -11,11 +11,6 @@ import com.grace.app.widget.VerseOfDayWidget
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
-/**
- * Nightly sync of the next 7 days of devotionals + their verses into Room so the
- * app is fully usable offline. Refreshes the home-screen verse widget after a
- * successful sync. Retries with WorkManager's backoff on failure.
- */
 @HiltWorker
 class DevoSyncWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,

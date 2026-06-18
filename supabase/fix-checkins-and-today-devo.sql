@@ -1,26 +1,14 @@
--- =============================================================================
--- GRACE — Bug-fix migration (smoke-test pass #1)
---   #3 checkins RLS: schema enabled RLS on `checkins` but never added policies,
---      so all inserts were blocked ("new row violates row-level security policy").
---   #4 devotional empty: the original seed used CURRENT_DATE at run time, so
---      "today" no longer matches. Re-seed for the current date.
--- Safe to re-run.
--- =============================================================================
 
--- #3 ----------------------------------------------------------------------------
 DROP POLICY IF EXISTS "checkins_insert_own" ON checkins;
 DROP POLICY IF EXISTS "checkins_select_own" ON checkins;
 DROP POLICY IF EXISTS "checkins_select_leader" ON checkins;
 
--- A youth submits their own check-in
 CREATE POLICY "checkins_insert_own" ON checkins
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- A youth reads their own check-ins
 CREATE POLICY "checkins_select_own" ON checkins
   FOR SELECT USING (auth.uid() = user_id);
 
--- The assigned leader (or any leader role) can read check-ins addressed to them
 CREATE POLICY "checkins_select_leader" ON checkins
   FOR SELECT USING (
     auth.uid() = leader_id
@@ -31,8 +19,6 @@ CREATE POLICY "checkins_select_leader" ON checkins
     )
   );
 
--- #4 ----------------------------------------------------------------------------
--- Insert today's devotional if one doesn't already exist for today.
 INSERT INTO devotionals
   (scheduled_date, title, verse_ref, verse_text, reflection, prayer_starter, journal_prompt)
 SELECT

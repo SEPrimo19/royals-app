@@ -53,15 +53,12 @@ fun PrayerWallScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Re-fetch + reconcile every time the screen enters composition so deletes
-    // in Supabase reflect without requiring an app restart.
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refresh() }
 
-    // Surface intercede/post failures the user could previously never see.
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.effect.collect { fx ->
             if (fx is PrayerEffect.ShowError) {
-                viewModel.onEvent(PrayerEvent.DismissError) // clear any stale
+                viewModel.onEvent(PrayerEvent.DismissError)
                 viewModel.surfaceError(fx.message)
             }
         }
@@ -72,8 +69,6 @@ fun PrayerWallScreen(
             .fillMaxSize()
             .background(GraceDeepBlue)
     ) {
-        // MenuButtonRow owns its 16dp-from-edge contract — must sit OUTSIDE
-        // the horizontally-padded content column below.
         MenuButtonRow(onOpenMenu)
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Row(
@@ -83,8 +78,6 @@ fun PrayerWallScreen(
         ) {
             Column {
                 Text("Prayer Wall 🙏", color = GraceCream, fontSize = 26.sp)
-                // Always show the unfiltered total — filtering shouldn't make
-                // the community feel smaller than it is.
                 val n = state.totalActiveCount
                 val countText = if (n == 1) "1 prayer being lifted up"
                     else "$n prayers being lifted up"
@@ -108,9 +101,6 @@ fun PrayerWallScreen(
             PostForm(state, viewModel)
         }
 
-        // Sort/filter chips (audit-item #3). Row 1: sort. Row 2: category.
-        // Each row scrolls horizontally on its own — keeps the layout tidy
-        // on phones, even with longer labels like "Most Prayed".
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(PrayerSort.entries) { s ->
@@ -143,9 +133,6 @@ fun PrayerWallScreen(
 
         GracePullToRefresh(onRefresh = { viewModel.refresh() }) {
             if (state.prayers.isEmpty() && !state.isLoading) {
-                // Friendly empty state. The active filter chip changes the copy
-                // so users know whether "nothing here" means the wall is empty
-                // or just the filter excludes everything.
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -167,9 +154,6 @@ fun PrayerWallScreen(
                     items(state.prayers, key = { it.id }) { prayer ->
                         PrayerCard(
                             prayer = prayer,
-                            // Whichever source is higher wins. Without max(), an initial
-                            // Realtime count of 0 would mask the optimistic Room bump,
-                            // and the user would think the tap did nothing.
                             realtimePrayCount = maxOf(
                                 state.prayCountUpdates[prayer.id] ?: 0,
                                 prayer.prayCount
@@ -187,11 +171,10 @@ fun PrayerWallScreen(
                 }
             }
         }
-        }  // inner padded Column
+        }
     }
 }
 
-/** Display label for the sort enum used in the audit-item #3 chip row. */
 private fun sortLabel(s: PrayerSort): String = when (s) {
     PrayerSort.NEWEST -> "Newest"
     PrayerSort.OLDEST -> "Oldest"

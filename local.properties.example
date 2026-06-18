@@ -20,10 +20,13 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 # Safe to embed in the APK; RLS policies are the real security boundary.
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# ESV / NKJV Bible API key (free tier at https://api.esv.org).
-# Used by DevotionalRepository.fetchAndCacheVerse for the offline verse cache.
-# Leave blank to disable (the app falls back to a curated catalogue).
-BIBLE_API_KEY=Token your-bible-api-key-here
+# Bible API key — OPTIONAL.
+# The app uses bible-api.com (free, KJV, no key required) for leader-written
+# devotional verse refs that aren't in the bundled catalogue. The daily verse
+# itself ships with KJV text embedded in VerseCatalogue.kt and never hits the
+# network. Leave this blank unless you later swap in a licensed provider
+# (e.g. scripture.api.bible for NKJV); the value isn't currently read.
+BIBLE_API_KEY=
 
 # Google OAuth Web Client ID — for One Tap sign-in via the native Credential
 # Manager. Created in Google Cloud Console → Credentials → OAuth 2.0 → "Web"

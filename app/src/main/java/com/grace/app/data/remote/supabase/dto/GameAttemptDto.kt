@@ -3,7 +3,6 @@ package com.grace.app.data.remote.supabase.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Insert payload — server fills id + played_at. */
 @Serializable
 data class GameAttemptInsertDto(
     @SerialName("user_id") val userId: String,

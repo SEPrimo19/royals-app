@@ -28,15 +28,6 @@ import com.grace.app.presentation.theme.GraceCreamDim
 import com.grace.app.presentation.theme.GraceGold
 import com.grace.app.presentation.theme.GraceRose
 
-/**
- * Shared Lifelines row used by Trivia + Who Am I?. Two pill chips:
- *   🛡️ JOSHUA  (n)    — freeze active Practice timer
- *   🕯️ DANIEL  (n)    — 50/50, eliminate 2 wrong MCQ options
- *
- * [showJoshua] is false for screens with no timer (Daily Trivia, Who Am I?).
- * Each chip dims when its count is 0. Tap → callback. Errors surface in a
- * compact red text under the bar, dismissable.
- */
 @Composable
 fun LifelinesBar(
     lifelines: LifelinesState,
@@ -104,10 +95,6 @@ private fun LifelinePill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // "alreadyUsed" disables the chip after it's been spent on the current
-    // question (e.g. Joshua already frozen, Daniel already 50/50'd). The
-    // server-side balance is the source of truth for the count, but per-Q
-    // single-use is a client guard.
     val disabled = count <= 0 || alreadyUsed
     val pillAlpha = if (disabled) 0.35f else 1f
     Row(

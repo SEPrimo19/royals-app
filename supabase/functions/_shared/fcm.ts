@@ -1,10 +1,3 @@
-// FCM HTTP v1 helper. Signs a short-lived JWT from the Firebase service
-// account stored in env (FCM_SERVICE_ACCOUNT_JSON — the entire JSON file
-// contents pasted verbatim), exchanges it for an OAuth access token, and
-// posts notifications.
-//
-// All env access is intentionally lazy so the import doesn't crash when
-// the secret isn't set in development.
 
 type ServiceAccount = {
   project_id: string;
@@ -16,7 +9,6 @@ type FcmMessage = {
   token: string;
   title: string;
   body: string;
-  // Custom data — keys "channel" and "destination" are read by GraceFcmService.
   data: Record<string, string>;
 };
 
@@ -99,15 +91,6 @@ async function fetchAccessToken(): Promise<{ token: string; projectId: string }>
   return { token: cachedToken.value, projectId: sa.project_id };
 }
 
-/**
- * Sends one FCM notification. Failure here doesn't throw — bad tokens are
- * common (uninstalled app, expired token) and we don't want one bad token
- * to abort the whole batch. Returns true on success for logging.
- *
- * Logs the HTTP status + body on failure so diagnostics show up in the
- * Edge Functions Logs tab. Token strings are truncated — they're sensitive
- * device identifiers and shouldn't be persisted in logs in full.
- */
 export async function sendFcm(msg: FcmMessage): Promise<boolean> {
   const tokenHint = msg.token.slice(0, 12) + "…";
   try {

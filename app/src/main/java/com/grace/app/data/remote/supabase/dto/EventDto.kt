@@ -18,7 +18,6 @@ data class EventDto(
     @SerialName("created_at") val createdAt: String? = null
 )
 
-// Insert/upsert payload for an RSVP. Composite PK (event_id, user_id).
 @Serializable
 data class EventRsvpDto(
     @SerialName("event_id") val eventId: String,
@@ -26,16 +25,6 @@ data class EventRsvpDto(
     @SerialName("status") val status: String
 )
 
-/**
- * Insert payload — no `id` (Postgres generates it; sending "" causes the
- * "invalid input syntax for uuid" disguise-as-server-error bug we hit on
- * Life Groups). `created_by` is required so the creator-only QR + edit
- * gates can resolve ownership.
- *
- * `eventEndDate` and `requiresAttendance` are nullable/defaulted so the
- * server can fall back to legacy behavior (+2h, attendance on) if the
- * client doesn't send them.
- */
 @Serializable
 data class EventInsertDto(
     @SerialName("title") val title: String,

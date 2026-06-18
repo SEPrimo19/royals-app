@@ -27,19 +27,16 @@ import javax.inject.Inject
 
 data class DevotionalUiState(
     val devotional: Devotional? = null,
-    val currentStep: Int = 0, // 0=Scripture 1=Reflection 2=Prayer 3=Journal
+    val currentStep: Int = 0,
     val isLoading: Boolean = true,
     val isDone: Boolean = false,
     val streakCount: Int = 0,
     val journalText: String = "",
     val isMarkingComplete: Boolean = false,
-    // View-only: re-reading an already-completed devotional. Does NOT touch the
-    // user_devo_progress row, so completion / streak stay intact.
     val isReReading: Boolean = false,
     val error: String? = null,
     val isOfflineCached: Boolean = false
 ) {
-    // Once complete, progress stays 100% — re-reading never drops it to 0%.
     val progress: Float get() = if (isDone) 1f else (currentStep / 3f).coerceIn(0f, 1f)
 }
 
@@ -81,11 +78,6 @@ class DevotionalViewModel @Inject constructor(
         observeDone()
     }
 
-    /**
-     * Mirror today's progress row into [DevotionalUiState.isDone]. Without this
-     * the Devo screen would always open at step 0 even when Home shows 100% —
-     * because in-session completion was the ONLY thing that flipped isDone.
-     */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeDone() {
         viewModelScope.launch {
@@ -118,7 +110,6 @@ class DevotionalViewModel @Inject constructor(
                     is Result.Error -> _uiState.update {
                         it.copy(
                             isLoading = false,
-                            // Cached copy still on screen → soft offline state.
                             isOfflineCached = it.devotional != null,
                             error = if (it.devotional == null) result.message else null
                         )
@@ -157,8 +148,6 @@ class DevotionalViewModel @Inject constructor(
                 observeDevotional()
             }
             DevotionalEvent.MarkComplete -> markComplete()
-            // Re-read: leave isDone (and the progress row) alone, just show the
-            // step content again starting at Scripture.
             DevotionalEvent.ReadAgain -> _uiState.update {
                 it.copy(isReReading = true, currentStep = 0)
             }

@@ -34,12 +34,6 @@ import com.grace.app.presentation.theme.GraceGreen
 import com.grace.app.presentation.theme.GraceOrange
 import com.grace.app.presentation.theme.GracePurple
 
-/**
- * Hub landing page for personal + community content. Replaces the buried
- * "COMMUNITY" section in the old Settings screen. Reachable from a card on
- * Home so members find their attendance/progress/journal without spelunking
- * through the side drawer.
- */
 @Composable
 fun CommunityHubScreen(
     onBack: () -> Unit,

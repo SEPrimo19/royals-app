@@ -70,6 +70,8 @@ fun LeaderboardScreen(
                             "Your cell group · This week · Daily only"
                         LeaderboardPeriod.MONTHLY_GLOBAL ->
                             "All players · This month · Daily + Practice"
+                        LeaderboardPeriod.TEAMS ->
+                            "Cells ranked · This month · Total team points"
                     },
                     color = GraceCreamDim, fontSize = 12.sp
                 )
@@ -77,7 +79,6 @@ fun LeaderboardScreen(
         }
         Spacer(Modifier.height(14.dp))
 
-        // Period toggle — weekly cell vs monthly global.
         PeriodTabs(
             current = state.period,
             onSelect = { viewModel.selectPeriod(it) }
@@ -103,6 +104,7 @@ fun LeaderboardScreen(
                         when (state.period) {
                             LeaderboardPeriod.WEEKLY_CELL -> "REST OF THE WEEK"
                             LeaderboardPeriod.MONTHLY_GLOBAL -> "REST OF THE MONTH"
+                            LeaderboardPeriod.TEAMS -> "OTHER CELLS"
                         },
                         color = GraceCreamDim, fontSize = 10.sp,
                         letterSpacing = 2.sp, fontWeight = FontWeight.Bold
@@ -141,15 +143,21 @@ private fun PeriodTabs(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         TabChip(
-            label = "Weekly · Cell",
+            label = "Weekly",
             selected = current == LeaderboardPeriod.WEEKLY_CELL,
             onClick = { onSelect(LeaderboardPeriod.WEEKLY_CELL) },
             modifier = Modifier.weight(1f)
         )
         TabChip(
-            label = "Monthly · Global",
+            label = "Monthly",
             selected = current == LeaderboardPeriod.MONTHLY_GLOBAL,
             onClick = { onSelect(LeaderboardPeriod.MONTHLY_GLOBAL) },
+            modifier = Modifier.weight(1f)
+        )
+        TabChip(
+            label = "Teams",
+            selected = current == LeaderboardPeriod.TEAMS,
+            onClick = { onSelect(LeaderboardPeriod.TEAMS) },
             modifier = Modifier.weight(1f)
         )
     }
@@ -218,8 +226,6 @@ private fun Podium(top: List<LeaderboardEntry>, period: LeaderboardPeriod) {
     }
 }
 
-// Composable getter so the underlying GracePurple (now palette-driven)
-// resolves at call time rather than at class-init time.
 private val GraceOrangeOrPurple: Color
     @Composable @androidx.compose.runtime.ReadOnlyComposable
     get() = GracePurple
@@ -268,7 +274,6 @@ private fun PodiumColumn(
             )
         }
         Spacer(Modifier.height(6.dp))
-        // Tier height varies by rank to give a podium feel.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -408,6 +413,7 @@ private fun EmptyCard(period: LeaderboardPeriod) {
                 when (period) {
                     LeaderboardPeriod.WEEKLY_CELL -> "No scores yet this week"
                     LeaderboardPeriod.MONTHLY_GLOBAL -> "No scores yet this month"
+                    LeaderboardPeriod.TEAMS -> "No cell has scored yet this month"
                 },
                 color = GraceCream, fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
@@ -419,6 +425,8 @@ private fun EmptyCard(period: LeaderboardPeriod) {
                         "Play today's Daily Challenge to be the first on the board!"
                     LeaderboardPeriod.MONTHLY_GLOBAL ->
                         "Play Daily or Practice to be the first on the global board!"
+                    LeaderboardPeriod.TEAMS ->
+                        "Get your cell playing to put it on the board!"
                 },
                 color = GraceCreamDim, fontSize = 12.sp
             )
@@ -439,6 +447,8 @@ private fun YouAreOffTheBoardHint(period: LeaderboardPeriod) {
                     "Not on the board yet this week — play any Daily to join."
                 LeaderboardPeriod.MONTHLY_GLOBAL ->
                     "Not on the board yet this month — play Daily or Practice to join."
+                LeaderboardPeriod.TEAMS ->
+                    "Your cell isn't on the board yet — rally your group to play."
             },
             color = GraceCreamDim, fontSize = 12.sp,
             modifier = Modifier.padding(14.dp)

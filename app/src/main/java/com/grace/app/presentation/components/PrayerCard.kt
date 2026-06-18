@@ -43,9 +43,6 @@ import com.grace.app.presentation.theme.GraceRose
 import java.time.Duration
 import java.time.LocalDateTime
 
-// @Composable so the function can read the active palette via the
-// composable getters in Color.kt (GraceBlue etc. are no longer constants
-// after Phase C — they delegate to LocalGracePalette.current).
 @androidx.compose.runtime.Composable
 fun categoryColor(category: PrayerCategory): Color = when (category) {
     PrayerCategory.FAMILY -> GraceBlue
@@ -108,15 +105,11 @@ fun PrayerCard(
                 Spacer(Modifier.size(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        // Anonymous identity is NEVER shown — stripped in mapper too.
                         if (prayer.isAnonymous) "A Youth in Prayer"
                         else (prayer.userName ?: "A Youth in Prayer"),
                         color = GraceCream,
                         fontSize = 14.sp
                     )
-                    // Phase P.3 — "(via {leader})" tag when a leader posted
-                    // this prayer on behalf of the member. Pastoral
-                    // transparency — the community sees the human bridge.
                     if (prayer.postedByProxy != null) {
                         Text(
                             "via ${prayer.proxyLeaderName ?: "a leader"}",

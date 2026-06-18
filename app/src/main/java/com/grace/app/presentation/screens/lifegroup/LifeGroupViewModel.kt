@@ -8,6 +8,7 @@ import com.grace.app.domain.model.User
 import com.grace.app.domain.model.UserRole
 import com.grace.app.domain.usecase.lifegroup.AddMemberUseCase
 import com.grace.app.domain.usecase.lifegroup.CreateLifeGroupUseCase
+import com.grace.app.domain.usecase.lifegroup.DeleteLifeGroupUseCase
 import com.grace.app.domain.usecase.lifegroup.GetMyLifeGroupUseCase
 import com.grace.app.domain.usecase.lifegroup.ListInvitableUsersUseCase
 import com.grace.app.domain.usecase.lifegroup.RemoveMemberUseCase
@@ -34,19 +35,15 @@ data class LifeGroupUiState(
     val isLoading: Boolean = true,
     val isWorking: Boolean = false,
     val error: String? = null,
-    // Search state for the Add-Member dialog (debounced server query).
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
     val isSearching: Boolean = false,
-    // Browse-all-invitable state for the secondary "see everyone without
-    // a group" modal. The full list is loaded once when the modal opens,
-    // then filtered client-side via [browseFilter] so typing is instant.
     val browseOpen: Boolean = false,
     val browseAll: List<User> = emptyList(),
     val browseFilter: String = "",
-    val isBrowseLoading: Boolean = false
+    val isBrowseLoading: Boolean = false,
+    val showCreateForm: Boolean = false
 ) {
-    /** Client-side filter on top of the browse pool. */
     val browseFiltered: List<User>
         get() {
             val f = browseFilter.trim().lowercase()
@@ -60,21 +57,24 @@ data class LifeGroupUiState(
     val isLeaderOfThisGroup: Boolean
         get() = detail?.group?.leaderId != null && detail.group.leaderId == myUserId
 
-    /** Can manage: leader of this group OR senior leader. */
     val canManage: Boolean
         get() = isLeaderOfThisGroup ||
             myRole == UserRole.YOUTH_PRESIDENT ||
             myRole == UserRole.PASTOR ||
             myRole == UserRole.ADMIN
 
-    /** Can create: any role at/above cell_leader who isn't already in a group. */
+    private val canLead: Boolean
+        get() = myRole == UserRole.CELL_LEADER ||
+            myRole == UserRole.COUNCIL ||
+            myRole == UserRole.YOUTH_PRESIDENT ||
+            myRole == UserRole.PASTOR ||
+            myRole == UserRole.ADMIN
+
     val canCreate: Boolean
-        get() = detail == null && (
-            myRole == UserRole.CELL_LEADER ||
-                myRole == UserRole.YOUTH_PRESIDENT ||
-                myRole == UserRole.PASTOR ||
-                myRole == UserRole.ADMIN
-            )
+        get() = detail == null && canLead
+
+    val canCreateSecondCell: Boolean
+        get() = detail != null && myRole == UserRole.COUNCIL
 }
 
 sealed interface LifeGroupEvent {
@@ -84,9 +84,10 @@ sealed interface LifeGroupEvent {
     data class SearchQueryChanged(val query: String) : LifeGroupEvent
     data object ClearSearch : LifeGroupEvent
     data object LeaveGroup : LifeGroupEvent
+    data object ToggleCreateForm : LifeGroupEvent
+    data object DeleteGroup : LifeGroupEvent
     data object Refresh : LifeGroupEvent
     data object DismissError : LifeGroupEvent
-    // Browse-all modal events.
     data object OpenBrowse : LifeGroupEvent
     data object CloseBrowse : LifeGroupEvent
     data class BrowseFilterChanged(val query: String) : LifeGroupEvent
@@ -104,12 +105,11 @@ class LifeGroupViewModel @Inject constructor(
     private val addMemberUseCase: AddMemberUseCase,
     private val removeMemberUseCase: RemoveMemberUseCase,
     private val searchInvitableUsersUseCase: SearchInvitableUsersUseCase,
+    private val deleteLifeGroupUseCase: DeleteLifeGroupUseCase,
     private val listInvitableUsersUseCase: ListInvitableUsersUseCase,
     private val prefs: UserPreferencesRepo
 ) : ViewModel() {
 
-    // Holds the latest in-flight search so a fast typer doesn't render a
-    // result that was already obsolete by the time the network came back.
     private var searchJob: Job? = null
 
     private val _uiState = MutableStateFlow(LifeGroupUiState())
@@ -167,6 +167,9 @@ class LifeGroupViewModel @Inject constructor(
                 }
             }
             LifeGroupEvent.LeaveGroup -> leaveGroup()
+            LifeGroupEvent.ToggleCreateForm ->
+                _uiState.update { it.copy(showCreateForm = !it.showCreateForm) }
+            LifeGroupEvent.DeleteGroup -> deleteGroup()
             LifeGroupEvent.Refresh -> load()
             LifeGroupEvent.DismissError -> _uiState.update { it.copy(error = null) }
             LifeGroupEvent.OpenBrowse -> openBrowse()
@@ -205,8 +208,6 @@ class LifeGroupViewModel @Inject constructor(
         }
         _uiState.update { it.copy(isSearching = true) }
         searchJob = viewModelScope.launch {
-            // 300ms debounce — cancellation above means a fast typer never
-            // gets stale results overwriting fresh ones.
             delay(300)
             when (val r = searchInvitableUsersUseCase(query)) {
                 is Result.Success -> _uiState.update {
@@ -227,6 +228,7 @@ class LifeGroupViewModel @Inject constructor(
             _uiState.update { it.copy(isWorking = false) }
             when (r) {
                 is Result.Success -> {
+                    _uiState.update { it.copy(showCreateForm = false) }
                     _effect.emit(LifeGroupEffect.ShowSuccess("Life Group created."))
                     load()
                 }
@@ -242,10 +244,6 @@ class LifeGroupViewModel @Inject constructor(
             _uiState.update { it.copy(isWorking = true) }
             val r = addMemberUseCase(groupId, userId)
             _uiState.update {
-                // Clear search after a successful add so the dialog state
-                // resets cleanly for the next pick. Also strip the user
-                // out of the browse-all pool so the leader can keep
-                // adding from the list without seeing stale rows.
                 it.copy(
                     isWorking = false,
                     searchQuery = "",
@@ -284,6 +282,23 @@ class LifeGroupViewModel @Inject constructor(
     private fun leaveGroup() {
         val myId = _uiState.value.myUserId ?: return
         removeMember(myId)
+    }
+
+    private fun deleteGroup() {
+        val groupId = _uiState.value.detail?.group?.id ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isWorking = true) }
+            val r = deleteLifeGroupUseCase(groupId)
+            _uiState.update { it.copy(isWorking = false) }
+            when (r) {
+                is Result.Success -> {
+                    _effect.emit(LifeGroupEffect.ShowSuccess("Cell group deleted."))
+                    load()
+                }
+                is Result.Error -> _effect.emit(LifeGroupEffect.ShowError(r.message))
+                Result.Loading -> Unit
+            }
+        }
     }
 
     private fun parseRole(raw: String): UserRole = when (raw.trim().lowercase()) {

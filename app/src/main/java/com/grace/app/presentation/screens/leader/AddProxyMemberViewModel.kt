@@ -21,18 +21,14 @@ import javax.inject.Inject
 
 data class AddProxyMemberUiState(
     val name: String = "",
-    // Birthdate held as nullable LocalDate so the picker can start empty.
     val birthdate: LocalDate? = null,
-    val sex: String = "",                // "" until user picks M or F
+    val sex: String = "",
     val isCompassion: Boolean = false,
-    val compassionDigits: String = "",   // suffix only — PH867- prefix is locked
+    val compassionDigits: String = "",
     val emergencyContact: String = "",
     val email: String = "",
     val isSubmitting: Boolean = false,
     val error: String? = null,
-    // Phase P.2.6 — when this is set, the form was launched from an event
-    // roster. The UI shows an extra "Save & Mark Attended" button so the
-    // leader can register the new member AND mark them present in one tap.
     val attendForEventId: String? = null
 ) {
     val canSubmit: Boolean
@@ -52,8 +48,6 @@ sealed interface AddProxyMemberEvent {
     data class EmergencyChanged(val v: String) : AddProxyMemberEvent
     data class EmailChanged(val v: String) : AddProxyMemberEvent
     data object Submit : AddProxyMemberEvent
-    /** Phase P.2.6 — same as Submit but ALSO marks the new member attended
-     *  at attendForEventId. Only meaningful when that field is set. */
     data object SubmitAndMarkAttended : AddProxyMemberEvent
     data object DismissError : AddProxyMemberEvent
 }
@@ -69,8 +63,6 @@ class AddProxyMemberViewModel @Inject constructor(
     private val leaderRepository: LeaderRepository
 ) : ViewModel() {
 
-    // P.2.6 — optional nav arg. Null when the form was opened from My Members
-    // (generic add); set to the event's id when opened from EventRoster.
     private val attendForEventId: String? =
         savedStateHandle.get<String>("eventId")
             ?.takeIf { it.isNotBlank() }
@@ -93,14 +85,11 @@ class AddProxyMemberViewModel @Inject constructor(
                 _uiState.update { it.copy(sex = event.v) }
             is AddProxyMemberEvent.CompassionToggled ->
                 _uiState.update {
-                    // Clear digits when toggled off so a partial entry doesn't
-                    // leak back if the user toggles on later.
                     if (event.v) it.copy(isCompassion = true)
                     else it.copy(isCompassion = false, compassionDigits = "")
                 }
             is AddProxyMemberEvent.CompassionDigitsChanged ->
                 _uiState.update {
-                    // Digits-only, capped at 4 — matches the DB regex.
                     it.copy(
                         compassionDigits = event.v
                             .filter { c -> c.isDigit() }
@@ -138,11 +127,6 @@ class AddProxyMemberViewModel @Inject constructor(
                 is Result.Success -> {
                     val newId = result.data
                     val eventId = s.attendForEventId
-                    // P.2.6 — chain the attendance mark when the leader
-                    // tapped "Save & Mark Attended". If marking fails we
-                    // still treat the registration as a success (the
-                    // member exists; the leader can mark them via the
-                    // Roster). Surfaces a soft warning instead.
                     if (markAttended && eventId != null) {
                         val r = leaderRepository.markProxyAttendance(
                             eventId = eventId,

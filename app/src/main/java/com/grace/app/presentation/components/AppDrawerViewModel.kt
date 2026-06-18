@@ -16,21 +16,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * State backing AppDrawer. Mirrors the subset of SettingsViewModel that the
- * drawer needs (profile fields + reminder times) so the drawer is fully
- * self-contained and doesn't depend on SettingsScreen being on-screen.
- */
 data class AppDrawerUiState(
     val name: String = "",
     val email: String = "",
     val role: String = "",
     val reminderHour: Int = 7,
-    val prayerReminderHour: Int = 21
+    val prayerReminderHour: Int = 21,
+    val bibleGamesReminderHour: Int = 19
 ) {
     val isLeader: Boolean
-        get() = role == "cell_leader" || role == "youth_president" ||
-            role == "pastor" || role == "admin"
+        get() = role == "cell_leader" || role == "council" ||
+            role == "youth_president" || role == "pastor" || role == "admin"
     val isAdmin: Boolean
         get() = role == "youth_president" || role == "admin"
 }
@@ -48,7 +44,8 @@ class AppDrawerViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 prefs.userName, prefs.userEmail, prefs.userRole,
-                prefs.devoReminderHour, prefs.prayerReminderHour
+                prefs.devoReminderHour, prefs.prayerReminderHour,
+                prefs.bibleGamesReminderHour
             ) { values -> values.toList() }.collect { vals ->
                 _uiState.update {
                     it.copy(
@@ -56,7 +53,8 @@ class AppDrawerViewModel @Inject constructor(
                         email = (vals[1] as? String) ?: "",
                         role = (vals[2] as? String) ?: "member",
                         reminderHour = (vals[3] as? Int) ?: 7,
-                        prayerReminderHour = (vals[4] as? Int) ?: 21
+                        prayerReminderHour = (vals[4] as? Int) ?: 21,
+                        bibleGamesReminderHour = (vals[5] as? Int) ?: 19
                     )
                 }
             }
@@ -78,6 +76,16 @@ class AppDrawerViewModel @Inject constructor(
             val normalized = ((hour % 24) + 24) % 24
             prefs.setPrayerReminderHour(normalized)
             ReminderScheduler.schedulePrayerReminder(
+                appContext, normalized, ExistingPeriodicWorkPolicy.REPLACE
+            )
+        }
+    }
+
+    fun setBibleGamesReminderHour(hour: Int) {
+        viewModelScope.launch {
+            val normalized = ((hour % 24) + 24) % 24
+            prefs.setBibleGamesReminderHour(normalized)
+            ReminderScheduler.scheduleBibleGamesReminder(
                 appContext, normalized, ExistingPeriodicWorkPolicy.REPLACE
             )
         }

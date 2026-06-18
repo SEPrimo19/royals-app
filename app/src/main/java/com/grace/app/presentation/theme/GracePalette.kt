@@ -4,18 +4,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-/**
- * Royals brand palette held as a single data class so the entire color set
- * can be swapped atomically when the user picks Light/Dark/System theme.
- * UI code reads colors via the top-level `Grace*` properties in Color.kt,
- * which are composable getters that delegate to LocalGracePalette.current —
- * so a palette swap propagates through every screen on the next frame
- * without touching call sites.
- *
- * Adding a NEW color: add the field here, add it to BOTH Dark and Light
- * instances (or alias the Light value to Dark for now), and add the
- * composable getter in Color.kt.
- */
 @Immutable
 data class GracePalette(
     val gold:       Color,
@@ -34,7 +22,6 @@ data class GracePalette(
     val orange:     Color
 )
 
-/** Dark theme palette — the original Royals brand. */
 val DarkGracePalette = GracePalette(
     gold       = Color(0xFFC9A84C),
     goldLight  = Color(0xFFE8C96A),
@@ -52,23 +39,6 @@ val DarkGracePalette = GracePalette(
     orange     = Color(0xFFF4A261)
 )
 
-/**
- * Light theme palette — starter values shipped 2026-06-03.
- *
- * Design rationale:
- *  - Background = cream (#FAF7EE), echoes the Royals logo's white inside
- *  - Text = dark navy (#1B1D2E) for ~16:1 contrast (WCAG AAA)
- *  - Primary gold darkened (#A8841F) so it reads on white — pure brand
- *    gold (#C9A84C) disappears against light surfaces
- *  - Green darkened to match the laurel green in the Royals crest
- *  - Other accents (blue/rose/purple/orange) deepened for AA contrast
- *  - goldDim is INVERTED: in Dark mode it's a dimmer/darker gold for
- *    labels; in Light mode it's a lighter/softer gold for the same
- *    visual weight (label should fade against bg, not dominate it)
- *
- * Iterate by editing the hex values here — palette is the single source
- * of truth and propagates app-wide via LocalGracePalette.
- */
 val LightGracePalette = GracePalette(
     gold       = Color(0xFFA8841F),
     goldLight  = Color(0xFFC9A14C),
@@ -86,9 +56,4 @@ val LightGracePalette = GracePalette(
     orange     = Color(0xFFD37A36)
 )
 
-/**
- * CompositionLocal carrying the currently active palette. Defaults to Dark
- * so any composable that renders OUTSIDE a GraceTheme (previews,
- * standalone tests) gets sensible values instead of a crash.
- */
 val LocalGracePalette = compositionLocalOf { DarkGracePalette }

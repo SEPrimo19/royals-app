@@ -58,6 +58,7 @@ fun SettingsScreen(
     onNavigateLogin: () -> Unit,
     onBack: () -> Unit,
     onOpenEditProfile: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -132,8 +133,6 @@ fun SettingsScreen(
                     .padding(vertical = 10.dp)
             )
         } else {
-            // Surface a friendly note for Google-only users instead of just
-            // hiding the row — clarifies WHERE to change their password.
             Text(
                 "Your password is managed by Google. To change it, open " +
                     "your Google account settings.",
@@ -183,10 +182,25 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         SectionHeader("PRIVACY")
         Text(
-            "Your journal entries are encrypted on your device and never " +
-                "readable by anyone else.",
+            "Your journal entries are private to you — only you can read them — " +
+                "and saved to your account, so they're restored if you reinstall " +
+                "or switch phones.",
             color = GraceCreamDim,
             fontSize = 12.sp
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Privacy & Guidelines",
+            color = GraceGold,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenPrivacy() }
+                .padding(vertical = 8.dp)
+        )
+        Text(
+            "Read what data we collect, how it's used, and how we treat each " +
+                "other on Royals.",
+            color = GraceCreamDim, fontSize = 11.sp
         )
         Spacer(Modifier.height(12.dp))
         Text(
@@ -228,7 +242,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         SectionHeader("ABOUT")
         Text(
-            "Royals: The Kingdom Builders · v${viewModel.appVersion}",
+            "Royals: The Kingdom Builders · v${viewModel.appVersion} (build ${BuildConfig.VERSION_CODE})",
             color = GraceCreamDim, fontSize = 12.sp
         )
         Text("Made with ❤️ for the Church in the Philippines",
@@ -256,10 +270,6 @@ fun SettingsScreen(
         )
     }
 
-    // Phase B: surface delete-account failures so the user knows the data
-    // wasn't actually deleted (Edge Function down, network drop, etc.).
-    // Without this, a failed delete used to silently appear to "work" and
-    // the user would think their data was gone.
     state.deleteAccountError?.let { msg ->
         AlertDialog(
             onDismissRequest = {
@@ -290,8 +300,6 @@ fun SettingsScreen(
                 viewModel.onEvent(SettingsEvent.DismissPasswordResult)
             }
         )
-        // Auto-dismiss the dialog once the VM reports success — keeps the
-        // success toast visible briefly while the dialog animates out.
         LaunchedEffect(state.passwordChangeSuccess) {
             if (state.passwordChangeSuccess) {
                 kotlinx.coroutines.delay(1200)
@@ -401,24 +409,8 @@ private fun SectionHeader(text: String) {
     Spacer(Modifier.height(8.dp))
 }
 
-/**
- * Bug-report support address. Replace with whatever inbox you want to
- * receive user reports at. Could also be a forwarded shared mailbox if
- * you grow past one maintainer.
- */
 private const val SUPPORT_EMAIL = "jhonclarencerulona19@gmail.com"
 
-/**
- * Opens the user's email composer (Gmail, Outlook, etc.) addressed to
- * [SUPPORT_EMAIL] with a pre-filled subject + body. The body contains
- * diagnostic context the maintainer needs to investigate — app version,
- * device model, Android version, the reporter's user id — so the user
- * just has to type "what happened" and hit Send.
- *
- * Falls back gracefully if no email app is installed (rare but possible
- * on stripped-down ROMs): shows a toast-friendly chooser dialog from the
- * system. If even that fails, the call is a no-op rather than a crash.
- */
 private fun openBugReportEmail(
     activity: Activity,
     userEmail: String,
@@ -444,9 +436,6 @@ private fun openBugReportEmail(
         appendLine("Role: $role")
     }
 
-    // ACTION_SENDTO with mailto: scheme — this ensures ONLY email apps
-    // pick up the intent (the chooser won't show every text-handler
-    // installed on the device, just real mail clients).
     val intent = Intent(Intent.ACTION_SENDTO).apply {
         data = Uri.parse("mailto:")
         putExtra(Intent.EXTRA_EMAIL, arrayOf(SUPPORT_EMAIL))
@@ -456,11 +445,6 @@ private fun openBugReportEmail(
     runCatching { activity.startActivity(intent) }
 }
 
-/**
- * Three-option segmented picker for Dark / Light / System theme. Mirrors
- * the visual style of FontScaleSelector so the two appearance controls
- * read as a matched pair.
- */
 @Composable
 private fun ThemeModeSelector(
     current: ThemeMode,
@@ -498,12 +482,6 @@ private fun ThemeModeSelector(
     }
 }
 
-/**
- * Three-option segmented picker for in-app text scale. Live preview lives
- * just below this row so users can see the result without leaving Settings.
- * Tolerance ranges around the canonical values (1.0 / 1.15 / 1.30) catch
- * any rounding drift from DataStore round-tripping.
- */
 @Composable
 private fun FontScaleSelector(
     current: Float,

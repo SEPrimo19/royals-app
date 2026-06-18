@@ -60,18 +60,11 @@ import com.grace.app.presentation.screens.progress.MyProgressScreen
 import com.grace.app.presentation.screens.profile.EditProfileScreen
 import com.grace.app.presentation.screens.settings.SettingsScreen
 
-/**
- * Root navigation. [startGraph] is decided by MainActivity from the persisted
- * session. After auth completes we jump to MAIN_GRAPH and clear the whole auth
- * back stack so Back can't return to Login.
- */
 @Composable
 fun NavGraph(
     navController: NavHostController,
     startGraph: String
 ) {
-    // App-level drawer state. Only swipeable on main-graph destinations so
-    // the user can't accidentally open the side menu on Login / SignUp.
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -86,14 +79,18 @@ fun NavGraph(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        // Allow swipe-to-open / swipe-to-close on main-graph screens;
-        // disable entirely on auth screens so the drawer can't sneak in.
         gesturesEnabled = onMainGraph,
         drawerContent = {
             AppDrawer(
                 onCloseDrawer = closeDrawer,
                 onOpenEditProfile = { navController.navigate(Screen.EditProfile.route) },
+                onOpenBible = { navController.navigate(Screen.Bible.route) },
+                onOpenStudyNotes = { navController.navigate(Screen.StudyNotes.route) },
                 onOpenLifeGroup = { navController.navigate(Screen.LifeGroup.route) },
+                onOpenFindCell = { navController.navigate(Screen.FindCell.route) },
+                onOpenDiscipleship = {
+                    navController.navigate(Screen.DiscipleshipLibrary.route)
+                },
                 onOpenMyContent = { navController.navigate(Screen.MyContent.route) },
                 onOpenMyAttendance = { navController.navigate(Screen.MyAttendance.route) },
                 onOpenMyProgress = { navController.navigate(Screen.MyProgress.route) },
@@ -145,32 +142,13 @@ private fun NavGraphContent(
         }
 
         navigation(
-            // Phase P.5 — ClaimRecord is the start destination, NOT Home.
-            // MainActivity's userId observer rebuilds the NavHost on auth
-            // state change, which races against any toMainGraph() navigate
-            // call and lands the user on whatever startDestination is set
-            // here. Putting ClaimRecord first ensures the claim check
-            // ALWAYS runs on first MAIN_GRAPH entry — fresh signup or
-            // cold-start with a persisted session. The screen auto-
-            // redirects to Home in <500ms when there's no claimable proxy.
             startDestination = Screen.ClaimRecord.route,
             route = Screen.MAIN_GRAPH
         ) {
-            // Phase P.5 — start destination for MAIN_GRAPH. Self-detects
-            // whether a proxy record matches the signed-in user's email and
-            // either shows the "We found your record" prompt OR redirects
-            // to Home in <500ms (one RPC round-trip) when there's no match.
-            // Runs on EVERY MAIN_GRAPH entry — fresh signups + cold starts
-            // alike — so existing users see a brief loading flash but no
-            // wrong UX, and proxy claim NEVER gets bypassed by the
-            // MainActivity auth-state race that would otherwise short-
-            // circuit the SignUp → ProfileSetup → ClaimRecord chain.
             composable(Screen.ClaimRecord.route) {
                 ClaimRecordScreen(
                     onDone = {
                         navController.navigate(Screen.Home.route) {
-                            // popUpTo ClaimRecord inclusive so Back from Home
-                            // doesn't bounce back here (would loop).
                             popUpTo(Screen.ClaimRecord.route) { inclusive = true }
                             launchSingleTop = true
                         }
@@ -179,22 +157,20 @@ private fun NavGraphContent(
             }
             composable(Screen.Home.route) {
                 HomeScreen(
-                    // Tab destinations go through the shared helper so the back
-                    // stack matches the bottom bar exactly.
                     onOpenDevotional = { navController.navigateToTab(Screen.Devotional.route) },
                     onOpenPrayer = { navController.navigateToTab(Screen.Prayer.route) },
                     onOpenFeed = { navController.navigateToTab(Screen.Feed.route) },
                     onOpenLeaders = { navController.navigateToTab(Screen.Leaders.route) },
-                    // Top-left burger button opens the app-level drawer (My
-                    // Content / Reminders / Admin / Settings). Settings is
-                    // no longer reachable from the Home top bar directly —
-                    // it lives inside the drawer's footer.
                     onOpenMenu = onOpenMenu,
                     onOpenEvents = { navController.navigate(Screen.Events.route) },
                     onOpenCommunity = {
                         navController.navigate(Screen.CommunityHub.route)
                     },
-                    onOpenGames = { navController.navigate(Screen.GamesHome.route) }
+                    onOpenGames = { navController.navigate(Screen.GamesHome.route) },
+                    onOpenDiscipleship = {
+                        navController.navigate(Screen.DiscipleshipLibrary.route)
+                    },
+                    onOpenBible = { navController.navigate(Screen.Bible.route) }
                 )
             }
             composable(Screen.GamesHome.route) {
@@ -291,10 +267,6 @@ private fun NavGraphContent(
                 TriviaScreen(onExit = { navController.popBackStack() })
             }
             composable(Screen.Settings.route) {
-                // Slimmed Settings now hosts only account-management concerns
-                // (profile, password, notifications, privacy, sign out). All
-                // navigation shortcuts (My Content, reminders, admin, etc.)
-                // moved into the app-level drawer (AppDrawer.kt).
                 SettingsScreen(
                     onNavigateLogin = {
                         navController.navigate(Screen.AUTH_GRAPH) {
@@ -305,7 +277,15 @@ private fun NavGraphContent(
                     onBack = { navController.popBackStack() },
                     onOpenEditProfile = {
                         navController.navigate(Screen.EditProfile.route)
+                    },
+                    onOpenPrivacy = {
+                        navController.navigate(Screen.Privacy.route)
                     }
+                )
+            }
+            composable(Screen.Privacy.route) {
+                com.grace.app.presentation.screens.privacy.PrivacyScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.MyJournal.route) {
@@ -327,8 +307,6 @@ private fun NavGraphContent(
                     }
                 )
             }
-            // Leader-only inbox + member detail screens. RLS on the backend
-            // limits the data even if a non-leader navigates here directly.
             composable(Screen.MyMembers.route) {
                 MyMembersScreen(
                     onBack = { navController.popBackStack() },
@@ -336,8 +314,6 @@ private fun NavGraphContent(
                         navController.navigate(Screen.MemberDetail(memberId).createRoute())
                     },
                     onAddProxyMember = {
-                        // From My Members the form is generic (no eventId) —
-                        // just registers, doesn't mark attendance.
                         navController.navigate(Screen.AddProxyMember().createRoute())
                     }
                 )
@@ -353,8 +329,6 @@ private fun NavGraphContent(
                 AddProxyMemberScreen(
                     onBack = { navController.popBackStack() },
                     onMemberAdded = {
-                        // Pop the form screen — newly added member appears on
-                        // the next MyMembers / EventRoster refresh.
                         navController.popBackStack()
                     }
                 )
@@ -423,7 +397,6 @@ private fun NavGraphContent(
                     }
                 )
             }
-            // Settings → My Content wiring is in the Settings composable above.
             composable(Screen.Events.route) {
                 EventsScreen(
                     onBack = { navController.popBackStack() },
@@ -471,7 +444,6 @@ private fun NavGraphContent(
                 arguments = listOf(navArgument("eventId") { type = NavType.StringType })
             ) {
                 EventCheckInScreen(onDone = {
-                    // After check-in, drop the confirmation page and land on Events.
                     navController.popBackStack(Screen.Home.route, inclusive = false)
                     navController.navigate(Screen.Events.route)
                 })
@@ -480,8 +452,6 @@ private fun NavGraphContent(
                 route = "event_roster/{eventId}",
                 arguments = listOf(navArgument("eventId") { type = NavType.StringType })
             ) { backStackEntry ->
-                // Resolve the eventId from the nav arg so the inline + Add
-                // path can forward it to AddProxyMember (P.2.6 flow).
                 val eventId = backStackEntry.arguments?.getString("eventId").orEmpty()
                 EventRosterScreen(
                     onBack = { navController.popBackStack() },
@@ -537,6 +507,37 @@ private fun NavGraphContent(
             composable(Screen.LifeGroup.route) {
                 LifeGroupScreen(onBack = { navController.popBackStack() })
             }
+            composable(Screen.FindCell.route) {
+                com.grace.app.presentation.screens.lifegroup.FindCellScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.DiscipleshipLibrary.route) {
+                com.grace.app.presentation.screens.discipleship
+                    .DiscipleshipLibraryScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenAuthor = { activityId ->
+                            val id = activityId
+                                ?: Screen.DiscipleshipAuthor.NEW
+                            navController.navigate(
+                                Screen.DiscipleshipAuthor(id).createRoute()
+                            )
+                        }
+                    )
+            }
+            composable(
+                Screen.DiscipleshipAuthor("new").route,
+                arguments = listOf(
+                    androidx.navigation.navArgument("activityId") {
+                        type = androidx.navigation.NavType.StringType
+                    }
+                )
+            ) {
+                com.grace.app.presentation.screens.discipleship
+                    .DiscipleshipAuthorScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+            }
             composable(Screen.EditProfile.route) {
                 EditProfileScreen(onBack = { navController.popBackStack() })
             }
@@ -544,6 +545,27 @@ private fun NavGraphContent(
                 DevotionalScreen(
                     onBackToHome = { navController.navigateToTab(Screen.Home.route) },
                     onOpenMenu = onOpenMenu
+                )
+            }
+            composable(Screen.Bible.route) {
+                com.grace.app.presentation.screens.bible.BibleReaderScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.StudyNotes.route) {
+                com.grace.app.presentation.screens.bible.MyStudyNotesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenNote = { noteId ->
+                        navController.navigate(Screen.BibleNoteEditor(noteId).createRoute())
+                    }
+                )
+            }
+            composable(
+                route = "bible_note/{noteId}",
+                arguments = listOf(navArgument("noteId") { type = NavType.StringType })
+            ) {
+                com.grace.app.presentation.screens.bible.BibleNoteEditorScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Prayer.route) {
@@ -560,10 +582,6 @@ private fun NavGraphContent(
 }
 
 private fun NavHostController.toMainGraph() {
-    // Route through ClaimRecord on every fresh signin so the user gets the
-    // "we found your record" prompt if their email matches a leader-
-    // registered proxy row. ClaimRecord redirects to Home immediately
-    // when there's no match — invisible for the common case.
     navigate(Screen.ClaimRecord.route) {
         popUpTo(Screen.AUTH_GRAPH) { inclusive = true }
         launchSingleTop = true

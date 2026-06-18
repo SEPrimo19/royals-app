@@ -5,7 +5,6 @@ import com.grace.app.domain.repository.GamesRepository
 import com.grace.app.domain.util.Result
 import javax.inject.Inject
 
-/** Loads the caller's remaining lifeline balance (auto-refilled nightly). */
 class GetLifelinesUseCase @Inject constructor(
     private val gamesRepository: GamesRepository
 ) {

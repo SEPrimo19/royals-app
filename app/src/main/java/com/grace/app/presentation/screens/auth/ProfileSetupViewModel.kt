@@ -21,35 +21,24 @@ data class ProfileSetupUiState(
     val selectedRole: UserRole? = null,
     val availableGroups: List<Group> = emptyList(),
     val selectedGroupId: String? = null,
-    // Compassion participant fields. compassionDigits is just the 4-digit
-    // suffix the user types in — the PH867- prefix is fixed and added when
-    // we save to the server.
     val isCompassion: Boolean = false,
     val compassionDigits: String = "",
     val emergencyContact: String = "",
-    // Birthdate + sex required for accurate Compassion compliance reports.
-    // Optional for non-Compassion users (still helpful for demographics).
     val birthdate: java.time.LocalDate? = null,
-    val sex: String = "",   // "" until picked; "M" or "F" thereafter
+    val sex: String = "",
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null
 ) {
-    /**
-     * Compassion participants must have exactly 4 digits + birthdate + sex.
-     * Non-Compassion members skip those requirements. Emergency contact is
-     * always optional.
-     */
     val canSubmit: Boolean
         get() = selectedRole != null &&
-            !selectedGroupId.isNullOrBlank() &&
+            (selectedRole == UserRole.COUNCIL || !selectedGroupId.isNullOrBlank()) &&
             (!isCompassion || (
                 compassionDigits.length == 4 &&
                     birthdate != null &&
                     (sex == "M" || sex == "F")
             ))
 
-    /** Full Compassion ID the server stores, when applicable. */
     val composedCompassionNumber: String?
         get() = if (isCompassion && compassionDigits.length == 4)
             "PH867-$compassionDigits" else null
@@ -71,8 +60,6 @@ sealed interface ProfileSetupEffect {
     data class ShowError(val message: String) : ProfileSetupEffect
 }
 
-// AuthRepository is injected directly: getGroups/completeProfile are thin
-// passthroughs with no business rule, so a dedicated use case would add no value.
 @HiltViewModel
 class ProfileSetupViewModel @Inject constructor(
     private val authRepository: AuthRepository
@@ -104,13 +91,17 @@ class ProfileSetupViewModel @Inject constructor(
     fun onEvent(event: ProfileSetupEvent) {
         when (event) {
             is ProfileSetupEvent.RoleSelected ->
-                _uiState.update { it.copy(selectedRole = event.role) }
+                _uiState.update {
+                    if (event.role == UserRole.COUNCIL) {
+                        it.copy(selectedRole = event.role, selectedGroupId = null)
+                    } else {
+                        it.copy(selectedRole = event.role)
+                    }
+                }
             is ProfileSetupEvent.GroupSelected ->
                 _uiState.update { it.copy(selectedGroupId = event.groupId) }
             is ProfileSetupEvent.CompassionToggled ->
                 _uiState.update {
-                    // Clearing digits on toggle-off prevents stale data
-                    // surviving a "yes → no → yes" flip.
                     it.copy(
                         isCompassion = event.on,
                         compassionDigits = if (event.on) it.compassionDigits else ""
@@ -118,8 +109,6 @@ class ProfileSetupViewModel @Inject constructor(
                 }
             is ProfileSetupEvent.CompassionDigitsChanged ->
                 _uiState.update {
-                    // Strip non-digits and cap at 4. The IME's number keyboard
-                    // helps, but paste / autofill can still slip non-digits in.
                     it.copy(
                         compassionDigits = event.digits
                             .filter { c -> c.isDigit() }
@@ -143,7 +132,7 @@ class ProfileSetupViewModel @Inject constructor(
         viewModelScope.launch {
             val result = authRepository.completeProfile(
                 role = s.selectedRole!!,
-                groupId = s.selectedGroupId!!,
+                groupId = s.selectedGroupId,
                 isCompassion = s.isCompassion,
                 compassionNumber = s.composedCompassionNumber,
                 emergencyContact = s.emergencyContact.trim().takeIf { it.isNotEmpty() },

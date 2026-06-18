@@ -3,6 +3,7 @@ package com.grace.app.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.grace.app.data.local.dao.DevotionalDao
+import com.grace.app.data.local.dao.DiscipleshipDao
 import com.grace.app.data.local.dao.EventDao
 import com.grace.app.data.local.dao.MeditationSubmissionDao
 import com.grace.app.data.local.dao.OfflineSyncDao
@@ -13,6 +14,8 @@ import com.grace.app.data.local.dao.UserDevoProgressDao
 import com.grace.app.data.local.dao.VerseDao
 import com.grace.app.data.local.dao.WeeklyMeditationDao
 import com.grace.app.data.local.entity.DevotionalEntity
+import com.grace.app.data.local.entity.DiscipleshipActivityEntity
+import com.grace.app.data.local.entity.DiscipleshipTodayPickEntity
 import com.grace.app.data.local.entity.EventEntity
 import com.grace.app.data.local.entity.MeditationSubmissionEntity
 import com.grace.app.data.local.entity.OfflineSyncEntity
@@ -34,13 +37,11 @@ import com.grace.app.data.local.entity.WeeklyMeditationEntity
         UserDevoProgressEntity::class,
         EventEntity::class,
         WeeklyMeditationEntity::class,
-        MeditationSubmissionEntity::class
+        MeditationSubmissionEntity::class,
+        DiscipleshipActivityEntity::class,
+        DiscipleshipTodayPickEntity::class
     ],
-    // Bump v8 → v9: MeditationSubmissionEntity + PrayerEntity gained
-    // proxy attribution columns for Phase P.3 of Leader Proxy Mode.
-    // fallbackToDestructiveMigration wipes local caches — Supabase
-    // resyncs both tables on next entry.
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 abstract class GraceDatabase : RoomDatabase() {
@@ -54,6 +55,7 @@ abstract class GraceDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
     abstract fun weeklyMeditationDao(): WeeklyMeditationDao
     abstract fun meditationSubmissionDao(): MeditationSubmissionDao
+    abstract fun discipleshipDao(): DiscipleshipDao
 
     companion object {
         const val DB_NAME = "grace.db"

@@ -21,13 +21,8 @@ const val VERSE_POINTS = 30
 const val VERSE_PERFECT_BONUS = 10
 private const val WRONG_FLASH_MS = 500L
 
-/**
- * One word chip. [originalIndex] is the chip's identity (so we can tell
- * "the" from "the" if a verse repeats a word). [text] is the displayed
- * word.
- */
 data class WordChip(
-    val originalIndex: Int,   // position in the correct word list
+    val originalIndex: Int,
     val text: String
 )
 
@@ -35,11 +30,8 @@ data class VerseScrambleUiState(
     val isLoading: Boolean = true,
     val round: List<BibleVerseScramble> = emptyList(),
     val currentIndex: Int = 0,
-    /** Chips currently in the bottom pool (tap to place). */
     val pool: List<WordChip> = emptyList(),
-    /** Chips placed in slots, in placement order. */
     val placed: List<WordChip> = emptyList(),
-    /** The chip that just got flashed red — UI uses this for the flash animation. */
     val wrongFlashChipIndex: Int? = null,
     val wrongTapsThisVerse: Int = 0,
     val verseComplete: Boolean = false,
@@ -53,7 +45,6 @@ data class VerseScrambleUiState(
     val correctWords: List<String> get() = currentVerse?.correctWords.orEmpty()
     val progressLabel: String
         get() = "Verse ${(currentIndex + 1).coerceAtMost(round.size)} of ${round.size}"
-    /** True while no wrong taps have happened on this verse — eligible for bonus. */
     val isPerfectSoFar: Boolean get() = wrongTapsThisVerse == 0
 }
 
@@ -97,7 +88,6 @@ class VerseScrambleViewModel @Inject constructor(
         }
     }
 
-    /** Build chip pool for the verse at [index] (shuffled words). */
     private fun setupVerseAt(index: Int) {
         val verse = _uiState.value.round.getOrNull(index) ?: return
         val chips = verse.correctWords
@@ -116,20 +106,14 @@ class VerseScrambleViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Player tapped a chip in the pool. Strict left-to-right: if the chip
-     * is the next expected word it slots in; otherwise it flashes red,
-     * counts as a wrong tap, and stays in the pool.
-     */
     fun onChipTapped(chip: WordChip) {
         val s = _uiState.value
         if (s.verseComplete) return
-        if (s.wrongFlashChipIndex != null) return  // flash in flight
-        if (chip !in s.pool) return                // ignore stale taps
+        if (s.wrongFlashChipIndex != null) return
+        if (chip !in s.pool) return
 
-        val nextExpectedIndex = s.placed.size  // next slot to fill
+        val nextExpectedIndex = s.placed.size
         if (chip.originalIndex == nextExpectedIndex) {
-            // Correct. Move chip from pool to placed.
             val newPool = s.pool - chip
             val newPlaced = s.placed + chip
             val complete = newPlaced.size == s.correctWords.size
@@ -146,7 +130,6 @@ class VerseScrambleViewModel @Inject constructor(
             }
             if (complete) onVerseCompleted(pts)
         } else {
-            // Wrong. Flash the chip briefly, bump counter, leave in pool.
             _uiState.update {
                 it.copy(
                     wrongFlashChipIndex = chip.originalIndex,
@@ -160,15 +143,10 @@ class VerseScrambleViewModel @Inject constructor(
         }
     }
 
-    /** Tap a placed chip to take it back to the pool (in case they tap the
-     *  wrong correct word and want to course-correct). Free action, no
-     *  penalty. */
     fun onPlacedChipTapped(chip: WordChip) {
         val s = _uiState.value
         if (s.verseComplete) return
         if (chip !in s.placed) return
-        // Pop everything after this chip's position too, because the slots
-        // are filled in order. Simpler model than re-indexing.
         val idx = s.placed.indexOf(chip)
         val keptPlaced = s.placed.take(idx)
         val poppedChips = s.placed.drop(idx)
@@ -183,7 +161,6 @@ class VerseScrambleViewModel @Inject constructor(
     private fun onVerseCompleted(points: Int) {
         val s = _uiState.value
         val verse = s.currentVerse ?: return
-        // Record an attempt row for the leaderboard / monthly sum.
         viewModelScope.launch {
             recordAttemptUseCase(
                 mode = GameMode.VERSE_SCRAMBLE,
@@ -201,7 +178,6 @@ class VerseScrambleViewModel @Inject constructor(
         }
     }
 
-    /** Advance after the user taps "Next verse →". Ends round at last verse. */
     fun next() {
         val s = _uiState.value
         if (!s.verseComplete) return

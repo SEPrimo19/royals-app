@@ -64,11 +64,7 @@ class LogReflectionOnBehalfViewModel @Inject constructor(
         viewModelScope.launch {
             val meds = runCatching { getAllMeditationsUseCase().first() }
                 .getOrDefault(emptyList())
-                // Most recent first — leaders usually log the latest week's
-                // reflection from a paper journal handed in at the meeting.
                 .sortedByDescending { it.startDate }
-            // Default selection = the current week if there is one, else
-            // the most recent week.
             val today = LocalDate.now()
             val defaultId = meds.firstOrNull { it.isCurrent(today) }?.id
                 ?: meds.firstOrNull()?.id

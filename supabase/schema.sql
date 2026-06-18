@@ -1,19 +1,6 @@
--- =============================================================================
--- GRACE — Supabase schema (corrected, ordered, runnable as a single script)
---
--- Differences vs CLAUDE.md (all intentional, required to actually work):
---   1. Table order fixed; users/groups circular FK resolved via ALTER ... ADD.
---   2. Added the missing RLS policies for `users` and `groups` (CLAUDE.md
---      enables RLS on them but defines no policy → total lockout otherwise).
---   3. Enabled Realtime replication on prayers / prayer_intercessions / messages.
---   4. Seed rows at the bottom (one group + today's devotional) for testing.
---
--- Run in: Supabase Dashboard ▸ SQL Editor ▸ paste ▸ Run.
--- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ---- USERS (no group FK yet — added after groups exists) -------------------
 CREATE TABLE users (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email         TEXT UNIQUE NOT NULL,
@@ -27,7 +14,6 @@ CREATE TABLE users (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ---- GROUPS ----------------------------------------------------------------
 CREATE TABLE groups (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name        TEXT NOT NULL,
@@ -36,7 +22,6 @@ CREATE TABLE groups (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Resolve the circular reference now that both tables exist.
 ALTER TABLE users
   ADD CONSTRAINT users_group_id_fkey
   FOREIGN KEY (group_id) REFERENCES groups(id);
@@ -48,7 +33,6 @@ CREATE TABLE group_members (
   PRIMARY KEY (user_id, group_id)
 );
 
--- ---- READING PLANS / DEVOTIONALS ------------------------------------------
 CREATE TABLE reading_plans (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title         TEXT NOT NULL,
@@ -79,7 +63,6 @@ CREATE TABLE user_devo_progress (
   PRIMARY KEY (user_id, devo_id)
 );
 
--- ---- PRAYERS ---------------------------------------------------------------
 CREATE TABLE prayers (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -100,7 +83,6 @@ CREATE TABLE prayer_intercessions (
   PRIMARY KEY (prayer_id, user_id)
 );
 
--- ---- FEED ------------------------------------------------------------------
 CREATE TABLE posts (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -131,7 +113,6 @@ CREATE TABLE comments (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ---- MESSAGES / CHECK-INS / EVENTS ----------------------------------------
 CREATE TABLE messages (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sender_id    UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -204,9 +185,6 @@ CREATE TABLE challenge_progress (
   PRIMARY KEY (challenge_id, user_id)
 );
 
--- =============================================================================
--- ROW LEVEL SECURITY
--- =============================================================================
 ALTER TABLE users                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groups               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prayers              ENABLE ROW LEVEL SECURITY;
@@ -220,7 +198,6 @@ ALTER TABLE mood_checkins        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE devotionals          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_devo_progress   ENABLE ROW LEVEL SECURITY;
 
--- USERS — added (missing in CLAUDE.md, required for sign-up/profile to work).
 CREATE POLICY "users_select" ON users
   FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "users_insert" ON users
@@ -228,11 +205,9 @@ CREATE POLICY "users_insert" ON users
 CREATE POLICY "users_update" ON users
   FOR UPDATE USING (auth.uid() = id);
 
--- GROUPS — added (ProfileSetup reads the group list).
 CREATE POLICY "groups_select" ON groups
   FOR SELECT USING (auth.role() = 'authenticated');
 
--- PRAYERS
 CREATE POLICY "prayers_select" ON prayers
   FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "prayers_insert" ON prayers
@@ -240,23 +215,19 @@ CREATE POLICY "prayers_insert" ON prayers
 CREATE POLICY "prayers_update" ON prayers
   FOR UPDATE USING (auth.uid() = user_id);
 
--- PRAYER INTERCESSIONS (needed for the Realtime pray-count feature)
 CREATE POLICY "intercession_select" ON prayer_intercessions
   FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "intercession_insert" ON prayer_intercessions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- MESSAGES — only sender and receiver
 CREATE POLICY "messages_select" ON messages
   FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "messages_insert" ON messages
   FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
--- MOOD CHECK-INS
 CREATE POLICY "mood_own" ON mood_checkins
   FOR SELECT USING (auth.uid() = user_id);
 
--- DEVOTIONALS
 CREATE POLICY "devo_select" ON devotionals
   FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "devo_insert" ON devotionals
@@ -265,7 +236,6 @@ CREATE POLICY "devo_insert" ON devotionals
             AND role IN ('pastor','admin','youth_president'))
   );
 
--- JOURNAL — fully private to the owner
 CREATE POLICY "journal_select" ON user_devo_progress
   FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "journal_insert" ON user_devo_progress
@@ -273,16 +243,10 @@ CREATE POLICY "journal_insert" ON user_devo_progress
 CREATE POLICY "journal_update" ON user_devo_progress
   FOR UPDATE USING (auth.uid() = user_id);
 
--- =============================================================================
--- REALTIME (required for Prompt 5 live pray-count + Prompt 6 chat)
--- =============================================================================
 ALTER PUBLICATION supabase_realtime ADD TABLE prayers;
 ALTER PUBLICATION supabase_realtime ADD TABLE prayer_intercessions;
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
--- =============================================================================
--- SEED DATA (so the app shows something immediately for testing)
--- =============================================================================
 INSERT INTO groups (name, description)
 VALUES ('GRACE Youth (Default)', 'Default cell group for testing');
 

@@ -24,13 +24,10 @@ data class LoginUiState(
     val emailError: String? = null,
     val passwordError: String? = null,
     val generalError: String? = null,
-    // ---- Forgot password modal --------------------------------------
     val showForgotPasswordDialog: Boolean = false,
     val forgotPasswordEmail: String = "",
     val forgotPasswordError: String? = null,
     val isSendingPasswordReset: Boolean = false,
-    /** True after the reset email has been dispatched — UI swaps to a
-     *  "Check your email" confirmation until the user closes the dialog. */
     val passwordResetSent: Boolean = false
 )
 
@@ -39,11 +36,8 @@ sealed interface LoginEvent {
     data class PasswordChanged(val value: String) : LoginEvent
     data object PasswordVisibilityToggled : LoginEvent
     data object LoginClicked : LoginEvent
-    // Native One Tap surfaces success automatically via Supabase session;
-    // this event only fires on failure so the form can show the error.
     data class GoogleSignInFailed(val message: String) : LoginEvent
     data object NavigateToSignUp : LoginEvent
-    // Forgot password
     data object OpenForgotPasswordDialog : LoginEvent
     data object CloseForgotPasswordDialog : LoginEvent
     data class ForgotPasswordEmailChanged(val value: String) : LoginEvent
@@ -90,8 +84,6 @@ class LoginViewModel @Inject constructor(
             }
 
             LoginEvent.OpenForgotPasswordDialog -> _uiState.update {
-                // Pre-fill the email field from the sign-in form if the
-                // user already typed it — saves a step.
                 it.copy(
                     showForgotPasswordDialog = true,
                     forgotPasswordEmail = it.email,
@@ -118,8 +110,6 @@ class LoginViewModel @Inject constructor(
         val s = _uiState.value
         if (s.isSendingPasswordReset) return
         val email = s.forgotPasswordEmail.trim()
-        // Cheap client-side check — Supabase will return an error too,
-        // but a fast "looks-like-an-email" guard avoids one round trip.
         if (email.isBlank() || !email.contains("@") || !email.contains(".")) {
             _uiState.update {
                 it.copy(forgotPasswordError = "Enter a valid email address.")

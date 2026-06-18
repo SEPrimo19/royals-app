@@ -10,15 +10,6 @@ import com.grace.app.domain.util.Result
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-/**
- * Aggregates personal progress across four repos into one snapshot.
- *
- * Each contributing fetch is wrapped in `runCatching` so a single broken
- * source (network blip, RLS issue) doesn't blank the whole screen — the
- * field just stays at its default 0. The fetches don't depend on each
- * other, but they're sequential here for code clarity; the screen would
- * see no measurable benefit from parallelizing them in this case.
- */
 class GetMyProgressUseCase @Inject constructor(
     private val devotionalRepository: DevotionalRepository,
     private val prayerRepository: PrayerRepository,

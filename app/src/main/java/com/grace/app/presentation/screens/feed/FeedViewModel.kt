@@ -27,7 +27,6 @@ data class FeedUiState(
     val draftImageUri: String? = null,
     val draftVerseRef: String? = null,
     val isPosting: Boolean = false,
-    // Optimistic local overlay of the current user's reaction per post.
     val myReactions: Map<String, String> = emptyMap(),
     val error: String? = null
 )
@@ -37,6 +36,7 @@ sealed interface FeedEvent {
     data class DraftTextChanged(val text: String) : FeedEvent
     data class ImagePicked(val uri: String?) : FeedEvent
     data class VerseRefChanged(val ref: String) : FeedEvent
+    data class InsertScripture(val reference: String, val text: String) : FeedEvent
     data object SubmitPost : FeedEvent
     data class React(val postId: String, val reactionType: String) : FeedEvent
     data object DismissError : FeedEvent
@@ -82,15 +82,8 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Re-runs the remote fetch. The bottom-bar saveState/restoreState keeps
-     * this VM alive across tabs, so init's fetch only fires once per app
-     * lifetime. The screen calls this on each entry so new posts, deletes,
-     * and updated reaction counts always show up.
-     */
     fun refresh() { observeFeed() }
 
-    /** Lets the screen route effect-bus errors into the visible error line. */
     fun surfaceError(message: String) {
         _uiState.update { it.copy(error = message) }
     }
@@ -100,11 +93,23 @@ class FeedViewModel @Inject constructor(
             FeedEvent.ToggleCompose ->
                 _uiState.update { it.copy(showCompose = !it.showCompose) }
             is FeedEvent.DraftTextChanged ->
-                _uiState.update { it.copy(draftText = event.text) }
+                _uiState.update { it.copy(draftText = event.text.take(MAX_POST_LEN)) }
             is FeedEvent.ImagePicked ->
                 _uiState.update { it.copy(draftImageUri = event.uri) }
             is FeedEvent.VerseRefChanged ->
-                _uiState.update { it.copy(draftVerseRef = event.ref.ifBlank { null }) }
+                _uiState.update {
+                    it.copy(draftVerseRef = event.ref.take(MAX_REF_LEN).ifBlank { null })
+                }
+            is FeedEvent.InsertScripture ->
+                _uiState.update { s ->
+                    val body =
+                        if (s.draftText.isBlank()) event.text
+                        else s.draftText.trimEnd() + "\n\n" + event.text
+                    s.copy(
+                        draftText = body.take(MAX_POST_LEN),
+                        draftVerseRef = event.reference.take(MAX_REF_LEN)
+                    )
+                }
             FeedEvent.SubmitPost -> submitPost()
             is FeedEvent.React -> react(event.postId, event.reactionType)
             FeedEvent.DismissError -> _uiState.update { it.copy(error = null) }
@@ -112,10 +117,6 @@ class FeedViewModel @Inject constructor(
     }
 
     private fun submitPost() {
-        // Atomic claim — without this a rapid double-tap can race past the
-        // simple `if (isPosting) return` check, and EACH tap uploads its own
-        // image file before the first call sets isPosting=true. That's what
-        // produced two identical files in the storage bucket.
         var claimed = false
         _uiState.update { current ->
             if (current.isPosting) current
@@ -131,9 +132,10 @@ class FeedViewModel @Inject constructor(
             s.draftVerseRef != null -> PostType.SCRIPTURE
             else -> PostType.TEXT
         }
+        val cleanedText = cleanScripturePaste(s.draftText)
         viewModelScope.launch {
             when (val r = createPostUseCase(
-                type, s.draftText, s.draftImageUri, s.draftVerseRef
+                type, cleanedText, s.draftImageUri, s.draftVerseRef
             )) {
                 is Result.Success -> {
                     _uiState.update {
@@ -156,8 +158,20 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    companion object {
+        const val MAX_POST_LEN = 4000
+        const val MAX_REF_LEN = 80
+
+        fun cleanScripturePaste(raw: String): String =
+            raw
+                .replace(Regex("""https?://\S*bible\.com/\S*"""), "")
+                .replace(Regex("""\[\d+]"""), "")
+                .replace(Regex("""[ \t]{2,}"""), " ")
+                .replace(Regex("""\n{3,}"""), "\n\n")
+                .trim()
+    }
+
     private fun react(postId: String, reactionType: String) {
-        // Optimistic toggle of the local overlay.
         _uiState.update {
             val current = it.myReactions[postId]
             val next =
@@ -170,7 +184,6 @@ class FeedViewModel @Inject constructor(
             if (r is Result.Error) {
                 _effect.emit(FeedEffect.ShowError(r.message))
             } else {
-                // Counts come from the server aggregate — refresh to pull them.
                 observeFeed()
             }
         }

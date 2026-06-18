@@ -63,9 +63,9 @@ fun LifeGroupScreen(
     var toast by remember { mutableStateOf<String?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var pendingRemoveUser by remember { mutableStateOf<User?>(null) }
 
-    // Auto-dismiss toasts after 2.5s.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -111,8 +111,6 @@ fun LifeGroupScreen(
                     CircularProgressIndicator(color = GraceGold)
                 }
 
-            // Initial load failed AND we have nothing cached → don't show the
-            // Create form alongside an error. A Retry CTA is more honest.
             state.error != null && state.detail == null ->
                 LoadFailedView(
                     message = state.error!!,
@@ -131,8 +129,6 @@ fun LifeGroupScreen(
                 EmptyMemberState()
 
             else -> {
-                // Detail is present — a transient error (failed add/remove)
-                // can still surface as a small banner above the group view.
                 if (state.error != null) {
                     Text("⚠ ${state.error}", color = GraceRose)
                     Spacer(Modifier.height(10.dp))
@@ -143,8 +139,42 @@ fun LifeGroupScreen(
                     canManage = state.canManage,
                     onAdd = { showAddDialog = true },
                     onRemove = { pendingRemoveUser = it },
-                    onLeave = { showLeaveDialog = true }
+                    onLeave = { showLeaveDialog = true },
+                    onDelete = { showDeleteDialog = true }
                 )
+
+                if (state.canManage) {
+                    Spacer(Modifier.height(20.dp))
+                    JoinRequestsInbox(groupId = state.detail!!.group.id)
+                }
+
+                if (state.canCreateSecondCell) {
+                    Spacer(Modifier.height(24.dp))
+                    if (state.showCreateForm) {
+                        Text(
+                            "CREATE YOUR OWN CELL",
+                            color = GraceGold, fontSize = 11.sp,
+                            letterSpacing = 2.sp, fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        CreateGroupForm(
+                            isWorking = state.isWorking,
+                            onSubmit = { name, desc ->
+                                viewModel.onEvent(LifeGroupEvent.CreateGroup(name, desc))
+                            }
+                        )
+                    } else {
+                        Text(
+                            "＋ Create your own cell",
+                            color = GraceGold, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable {
+                                    viewModel.onEvent(LifeGroupEvent.ToggleCreateForm)
+                                }
+                                .padding(vertical = 8.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -162,8 +192,6 @@ fun LifeGroupScreen(
                 viewModel.onEvent(LifeGroupEvent.AddMember(user.id))
             },
             onBrowseAll = {
-                // Switch from typed-search to browse-all: close this, open
-                // the secondary modal which lists every groupless member.
                 showAddDialog = false
                 viewModel.onEvent(LifeGroupEvent.ClearSearch)
                 viewModel.onEvent(LifeGroupEvent.OpenBrowse)
@@ -221,6 +249,29 @@ fun LifeGroupScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showLeaveDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete this cell group?") },
+            text = {
+                Text(
+                    "This permanently removes the cell group. All current " +
+                        "members will become unassigned and can request to " +
+                        "join another cell. This can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.onEvent(LifeGroupEvent.DeleteGroup)
+                }) { Text("Delete", color = GraceRose) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -318,7 +369,8 @@ private fun GroupView(
     canManage: Boolean,
     onAdd: () -> Unit,
     onRemove: (User) -> Unit,
-    onLeave: () -> Unit
+    onLeave: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -372,7 +424,6 @@ private fun GroupView(
     }
     Spacer(Modifier.height(8.dp))
 
-    // Members minus the leader (shown separately above).
     val nonLeader = detail.members.filter { it.id != detail.group.leaderId }
     if (nonLeader.isEmpty()) {
         Text(
@@ -396,7 +447,6 @@ private fun GroupView(
         }
     }
 
-    // Leave-group control for non-leaders who are members.
     val isMember = myUserId != null && detail.members.any { it.id == myUserId }
     val isLeader = myUserId != null && detail.group.leaderId == myUserId
     if (isMember && !isLeader) {
@@ -407,6 +457,17 @@ private fun GroupView(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onLeave() }
+                .padding(vertical = 10.dp)
+        )
+    }
+    if (canManage) {
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "Delete this cell group",
+            color = GraceRose,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onDelete() }
                 .padding(vertical = 10.dp)
         )
     }
@@ -448,7 +509,6 @@ private fun MemberRow(
                 Text(user.email, color = GraceCreamDim, fontSize = 11.sp)
             }
 
-            // Messenger pill — only if user opted in (messengerPublic) and set a URL.
             val msg = user.messengerUrl
             if (user.messengerPublic && !msg.isNullOrBlank()) {
                 Text(
@@ -508,8 +568,6 @@ private fun SearchMemberDialog(
                     placeholder = { Text("Type at least 2 characters…", color = GraceCreamDim) }
                 )
                 Spacer(Modifier.height(6.dp))
-                // Discoverable alternative — leaders who don't know the
-                // member's exact name can browse the whole pool here.
                 TextButton(
                     onClick = onBrowseAll,
                     modifier = Modifier.align(Alignment.End)
@@ -523,8 +581,6 @@ private fun SearchMemberDialog(
                 Spacer(Modifier.height(4.dp))
                 when {
                     query.trim().length < 2 -> {
-                        // Quiet hint before the user types enough — keeps the
-                        // dialog from flashing "no results" prematurely.
                     }
                     isSearching -> Box(
                         Modifier.fillMaxWidth().height(80.dp),
@@ -561,8 +617,6 @@ private fun SearchMemberDialog(
                                 Spacer(Modifier.size(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(user.name, color = GraceCream, fontSize = 14.sp)
-                                    // Role only — email is intentionally
-                                    // hidden until the person is added.
                                     Text(
                                         "Member",
                                         color = GraceCreamDim, fontSize = 11.sp
@@ -582,12 +636,6 @@ private fun SearchMemberDialog(
     )
 }
 
-/**
- * Browse-all-invitable modal. Opened from the typed-search modal as the
- * companion path for leaders who don't know names yet. Loads the full
- * pool once on open; client-side filter for instant feedback as the
- * leader types in the search box.
- */
 @Composable
 private fun BrowseMembersDialog(
     filter: String,
@@ -634,9 +682,6 @@ private fun BrowseMembersDialog(
                         color = GraceCreamDim, fontSize = 12.sp
                     )
                     else -> {
-                        // Show count + list. Cap height so very large pools
-                        // don't push the Close button off-screen on small
-                        // phones — LazyColumn scrolls internally.
                         Text(
                             "${users.size} of $totalCount",
                             color = GraceCreamDim, fontSize = 11.sp
@@ -683,8 +728,6 @@ private fun BrowseMemberRow(user: User, onAdd: () -> Unit) {
         Spacer(Modifier.size(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(user.name, color = GraceCream, fontSize = 14.sp)
-            // Email is OK to surface here — it's a leader-only modal,
-            // and members chose to share it when they signed up.
             Text(user.email, color = GraceCreamDim, fontSize = 11.sp,
                 maxLines = 1)
         }

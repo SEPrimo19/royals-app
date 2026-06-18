@@ -24,12 +24,6 @@ data class MemberReflectionsUiState(
     val error: String? = null
 )
 
-/**
- * Dedicated screen for a leader to browse all weekly-meditation reflections
- * a single member has submitted. Same data shape as the embedded section
- * that used to live on MemberDetailScreen — extracted into its own route
- * so the list can grow without crowding the summary view.
- */
 @HiltViewModel
 class MemberReflectionsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -45,8 +39,6 @@ class MemberReflectionsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // Mentee lookup runs alongside the submissions query — both are
-            // cheap and the screen needs both to render its header.
             val mentee = (getMyMenteesUseCase() as? Result.Success)?.data
                 ?.firstOrNull { it.user.id == memberId }
 

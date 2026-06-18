@@ -21,10 +21,8 @@ const val MEMORY_POINTS_PER_PAIR = 10
 const val MEMORY_PERFECT_BONUS = 30
 private const val MISMATCH_FLIP_BACK_DELAY_MS = 900L
 
-/** One of the 12 cards on a board. Either side of a pair. */
 data class MemoryCard(
     val pairId: String,
-    /** True = REFERENCE side ("John 3:16"). False = SNIPPET side. */
     val isReference: Boolean,
     val text: String
 )
@@ -32,22 +30,16 @@ data class MemoryCard(
 data class MemoryMatchUiState(
     val isLoading: Boolean = true,
     val cards: List<MemoryCard> = emptyList(),
-    /** Indices currently face-up (matched OR mid-evaluation). */
     val faceUpIndices: Set<Int> = emptySet(),
-    /** Indices already matched — kept face-up permanently. */
     val matchedIndices: Set<Int> = emptySet(),
-    /** Times the player flipped two non-matching cards. */
     val mismatchCount: Int = 0,
     val matchedPairCount: Int = 0,
-    /** True while we're showing a mismatch before auto-flipping back. */
     val isEvaluating: Boolean = false,
     val boardComplete: Boolean = false,
     val pointsEarned: Int = 0,
-    /** Pairs in this round, for the "complete" screen reveal. */
     val pairs: List<MemoryCardPair> = emptyList(),
     val error: String? = null
 ) {
-    /** True when the perfect-clear bonus is still achievable. */
     val isPerfectSoFar: Boolean get() = mismatchCount == 0
 }
 
@@ -62,7 +54,6 @@ class MemoryMatchViewModel @Inject constructor(
 
     init { newBoard() }
 
-    /** Fetch fresh pool and build a new board of 6 random pairs. */
     fun newBoard() {
         viewModelScope.launch {
             _uiState.update { MemoryMatchUiState(isLoading = true) }
@@ -98,15 +89,14 @@ class MemoryMatchViewModel @Inject constructor(
 
     fun onCardTapped(index: Int) {
         val s = _uiState.value
-        if (s.isEvaluating) return                  // wait for flip-back animation
+        if (s.isEvaluating) return
         if (s.boardComplete) return
-        if (index in s.matchedIndices) return       // already matched
-        if (index in s.faceUpIndices) return        // already flipped this turn
+        if (index in s.matchedIndices) return
+        if (index in s.faceUpIndices) return
 
         val newFaceUp = s.faceUpIndices + index
         _uiState.update { it.copy(faceUpIndices = newFaceUp) }
 
-        // If we now have 2 face-up cards, evaluate.
         if (newFaceUp.size == 2) evaluatePair(newFaceUp.toList())
     }
 
@@ -117,7 +107,6 @@ class MemoryMatchViewModel @Inject constructor(
         val isMatch = a.pairId == b.pairId && a.isReference != b.isReference
 
         if (isMatch) {
-            // Lock the pair as matched, write a +10 attempt, check for end.
             val newMatched = s.matchedIndices + flipped[0] + flipped[1]
             val pairsMatchedNow = s.matchedPairCount + 1
             val complete = pairsMatchedNow >= MEMORY_PAIRS_PER_BOARD
@@ -134,9 +123,6 @@ class MemoryMatchViewModel @Inject constructor(
             }
             recordAttempt(a.pairId, correct = true, points = MEMORY_POINTS_PER_PAIR)
             if (complete && s.isPerfectSoFar) {
-                // Perfect-clear bonus is a separate attempt row for
-                // leaderboard parity — no character/passage id (it's a
-                // board-level bonus, not a per-content event).
                 recordAttempt(
                     pairId = null,
                     correct = true,
@@ -144,8 +130,6 @@ class MemoryMatchViewModel @Inject constructor(
                 )
             }
         } else {
-            // Mismatch: show both face-up briefly so the user sees them,
-            // then auto-flip back. Block taps during this window.
             _uiState.update { it.copy(isEvaluating = true) }
             viewModelScope.launch {
                 delay(MISMATCH_FLIP_BACK_DELAY_MS)
@@ -172,10 +156,6 @@ class MemoryMatchViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Build the shuffled 12-card deck: each pair contributes one reference
-     * card + one snippet card.
-     */
     private fun buildDeck(pairs: List<MemoryCardPair>): List<MemoryCard> {
         val cards = mutableListOf<MemoryCard>()
         pairs.forEach { p ->

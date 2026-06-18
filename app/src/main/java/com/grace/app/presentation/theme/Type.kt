@@ -7,14 +7,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// NOTE: The spec calls for Cormorant Garamond (display/scripture) + Lato (UI).
-// The actual font files (res/font/) are added in a later prompt. Until then we
-// alias them to system families so the project compiles and renders cleanly.
-// WHY: referencing R.font.* resources that do not yet exist would break the
-// build — these aliases are the single place to swap in real fonts later.
-val DisplayFont: FontFamily = FontFamily.Serif      // → cormorant_garamond_semibold
-val ScriptureFont: FontFamily = FontFamily.Serif    // → cormorant_garamond_italic
-val UIFont: FontFamily = FontFamily.SansSerif       // → lato
+val DisplayFont: FontFamily = FontFamily.Serif
+val ScriptureFont: FontFamily = FontFamily.Serif
+val UIFont: FontFamily = FontFamily.SansSerif
 
 val GraceTypography = Typography(
     displayLarge = TextStyle(

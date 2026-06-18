@@ -16,15 +16,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * State for the ClaimRecordScreen. We load the proxy match once on init.
- * Three terminal outcomes:
- *   - `proxy == null` → nothing to claim, screen should immediately
- *     emit DoneNoClaim and let MainActivity proceed to Home
- *   - `claimSuccess` → the SQL function returned OK; show a "Welcome
- *     back!" message briefly then route to Home
- *   - `error` → show the message, let the user dismiss without claiming
- */
 data class ClaimRecordUiState(
     val isLoading: Boolean = true,
     val proxy: User? = null,
@@ -34,19 +25,14 @@ data class ClaimRecordUiState(
 )
 
 sealed interface ClaimRecordEvent {
-    /** User confirmed the prompt — call the SQL function. */
     data object ConfirmClaim : ClaimRecordEvent
 
-    /** User said "Not me" — skip without claiming. */
     data object Dismiss : ClaimRecordEvent
 }
 
 sealed interface ClaimRecordEffect {
-    /** Either dismissed or no proxy match found — proceed to Home. */
     data object Done : ClaimRecordEffect
 
-    /** Claim succeeded — same proceed-to-Home but caller may show a
-     *  one-shot toast first. */
     data object Claimed : ClaimRecordEffect
 }
 
@@ -68,16 +54,10 @@ class ClaimRecordViewModel @Inject constructor(
                     val proxy = r.data
                     _uiState.update { it.copy(isLoading = false, proxy = proxy) }
                     if (proxy == null) {
-                        // Nothing to do — emit Done immediately so the
-                        // host can route past this screen without flashing.
                         _effect.emit(ClaimRecordEffect.Done)
                     }
                 }
                 is Result.Error -> {
-                    // Treat error as "no claim available" — the user
-                    // shouldn't be blocked from entering the app over a
-                    // background check failure. We still surface the error
-                    // briefly via state.
                     _uiState.update { it.copy(isLoading = false, error = r.message) }
                     _effect.emit(ClaimRecordEffect.Done)
                 }

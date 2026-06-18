@@ -30,6 +30,10 @@ class UserPreferencesRepo @Inject constructor(
         it[UserPreferences.PRAYER_REMINDER_HOUR]
             ?: UserPreferences.DEFAULT_PRAYER_REMINDER_HOUR
     }
+    val bibleGamesReminderHour: Flow<Int> = dataStore.data.map {
+        it[UserPreferences.BIBLE_GAMES_REMINDER_HOUR]
+            ?: UserPreferences.DEFAULT_BIBLE_GAMES_REMINDER_HOUR
+    }
 
     val notifPrayerEnabled: Flow<Boolean> =
         dataStore.data.map { it[UserPreferences.NOTIF_PRAYER_ENABLED] ?: true }
@@ -39,6 +43,8 @@ class UserPreferencesRepo @Inject constructor(
         dataStore.data.map { it[UserPreferences.NOTIF_MESSAGES_ENABLED] ?: true }
     val notifCommunityEnabled: Flow<Boolean> =
         dataStore.data.map { it[UserPreferences.NOTIF_COMMUNITY_ENABLED] ?: true }
+    val notifBibleGamesEnabled: Flow<Boolean> =
+        dataStore.data.map { it[UserPreferences.NOTIF_BIBLE_GAMES_ENABLED] ?: true }
 
     val fontScale: Flow<Float> = dataStore.data.map {
         it[UserPreferences.FONT_SCALE] ?: UserPreferences.DEFAULT_FONT_SCALE
@@ -46,6 +52,26 @@ class UserPreferencesRepo @Inject constructor(
 
     val themeMode: Flow<ThemeMode> = dataStore.data.map {
         ThemeMode.fromStored(it[UserPreferences.THEME_MODE])
+    }
+
+    val dismissedUpdateForVersion: Flow<Int> = dataStore.data.map {
+        it[UserPreferences.DISMISSED_UPDATE_FOR_VERSION] ?: 0
+    }
+
+    val lastBibleGamesPlayedDate: Flow<String> = dataStore.data.map {
+        it[UserPreferences.LAST_BIBLE_GAMES_PLAYED_DATE].orEmpty()
+    }
+
+    val bibleLastBook: Flow<Int> =
+        dataStore.data.map { it[UserPreferences.BIBLE_LAST_BOOK] ?: 43 }
+    val bibleLastChapter: Flow<Int> =
+        dataStore.data.map { it[UserPreferences.BIBLE_LAST_CHAPTER] ?: 1 }
+
+    suspend fun setBiblePosition(bookOrder: Int, chapter: Int) {
+        dataStore.edit { p ->
+            p[UserPreferences.BIBLE_LAST_BOOK] = bookOrder
+            p[UserPreferences.BIBLE_LAST_CHAPTER] = chapter
+        }
     }
 
     suspend fun saveSession(
@@ -68,10 +94,14 @@ class UserPreferencesRepo @Inject constructor(
         }
     }
 
-    suspend fun setRoleAndGroup(role: String, groupId: String) {
+    suspend fun setRoleAndGroup(role: String, groupId: String?) {
         dataStore.edit { p ->
             p[UserPreferences.USER_ROLE] = role
-            p[UserPreferences.GROUP_ID] = groupId
+            if (groupId.isNullOrBlank()) {
+                p.remove(UserPreferences.GROUP_ID)
+            } else {
+                p[UserPreferences.GROUP_ID] = groupId
+            }
         }
     }
 
@@ -87,23 +117,9 @@ class UserPreferencesRepo @Inject constructor(
         dataStore.edit { it[UserPreferences.LAST_DEVO_DATE] = date }
     }
 
-    /**
-     * Reconciles streak + lastDevoDate with the values stored on the server.
-     *
-     * Server wins when it's ahead or tied (covers fresh install + reinstall,
-     * where DataStore is empty and the server has the real value). Local
-     * wins when it's ahead (covers the case where the user completed a
-     * devotional offline, bumping local streak, and the next online sync
-     * hasn't yet pushed it back to the server — don't clobber that). This
-     * is the rule that keeps your streak alive across uninstalls.
-     */
     suspend fun reconcileStreakFromServer(serverStreak: Int, serverLastDevoIso: String?) {
         val local = devoStreak.first()
         if (serverStreak <= local && serverStreak > 0) return
-        // Normalize to plain ISO date (yyyy-MM-dd). The server's TIMESTAMPTZ
-        // comes back as "2026-05-28T00:00:00+00:00"; the streak comparison
-        // logic in DevotionalRepositoryImpl expects the plain LocalDate
-        // form — taking the first 10 chars handles both shapes.
         val normalized = serverLastDevoIso
             ?.takeIf { it.isNotBlank() }
             ?.let { if (it.length >= 10) it.substring(0, 10) else it }
@@ -123,6 +139,18 @@ class UserPreferencesRepo @Inject constructor(
         dataStore.edit { it[UserPreferences.PRAYER_REMINDER_HOUR] = hour }
     }
 
+    suspend fun setBibleGamesReminderHour(hour: Int) {
+        dataStore.edit { it[UserPreferences.BIBLE_GAMES_REMINDER_HOUR] = hour }
+    }
+
+    suspend fun setNotifBibleGamesEnabled(enabled: Boolean) {
+        dataStore.edit { it[UserPreferences.NOTIF_BIBLE_GAMES_ENABLED] = enabled }
+    }
+
+    suspend fun setLastBibleGamesPlayedDate(isoDate: String) {
+        dataStore.edit { it[UserPreferences.LAST_BIBLE_GAMES_PLAYED_DATE] = isoDate }
+    }
+
     suspend fun setNotifPrayerEnabled(enabled: Boolean) {
         dataStore.edit { it[UserPreferences.NOTIF_PRAYER_ENABLED] = enabled }
     }
@@ -140,8 +168,6 @@ class UserPreferencesRepo @Inject constructor(
     }
 
     suspend fun setFontScale(scale: Float) {
-        // Clamp defensively — applying scale > 2x or < 0.5x produces
-        // overlapping text and broken layouts.
         val safe = scale.coerceIn(0.85f, 1.5f)
         dataStore.edit { it[UserPreferences.FONT_SCALE] = safe }
     }
@@ -150,7 +176,10 @@ class UserPreferencesRepo @Inject constructor(
         dataStore.edit { it[UserPreferences.THEME_MODE] = mode.name }
     }
 
-    // Wipes the entire DataStore — used on sign-out / account deletion.
+    suspend fun setDismissedUpdateForVersion(versionCode: Int) {
+        dataStore.edit { it[UserPreferences.DISMISSED_UPDATE_FOR_VERSION] = versionCode }
+    }
+
     suspend fun clearAll() {
         dataStore.edit { it.clear() }
     }

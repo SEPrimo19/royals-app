@@ -19,11 +19,6 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/**
- * Fires a single local reminder ~1 hour before an event starts. Input data
- * carries the human-readable title/location/start so we don't need a Room
- * read at fire time. Notification tap deep-links into the Events tab.
- */
 @HiltWorker
 class EventReminderWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
@@ -32,9 +27,6 @@ class EventReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        // Events ride the Community channel — same rationale as the
-        // existing community feed. If a user has muted Community they
-        // don't want event nags either.
         if (!prefs.notifCommunityEnabled.first()) return Result.success()
 
         val eventId = params.inputData.getString(KEY_EVENT_ID) ?: return Result.success()
@@ -43,7 +35,9 @@ class EventReminderWorker @AssistedInject constructor(
         val startIso = params.inputData.getString(KEY_START_ISO)
 
         val startLocal = runCatching { LocalDateTime.parse(startIso) }.getOrNull()
-        val startText = startLocal?.format(DISPLAY_TIME) ?: ""
+        val startText = startLocal?.format(
+            DateTimeFormatter.ofPattern("EEE MMM d · h:mm a", Locale.getDefault())
+        ) ?: ""
 
         val body = if (location.isNullOrBlank()) {
             appContext.getString(R.string.event_reminder_body_no_location, startText)
@@ -84,10 +78,6 @@ class EventReminderWorker @AssistedInject constructor(
         const val KEY_TITLE = "title"
         const val KEY_LOCATION = "location"
         const val KEY_START_ISO = "start_iso"
-        /** Per-event unique-work name — re-scheduling REPLACEs the old request. */
         fun uniqueName(eventId: String) = "grace_event_reminder_$eventId"
-
-        private val DISPLAY_TIME: DateTimeFormatter =
-            DateTimeFormatter.ofPattern("EEE MMM d · h:mm a", Locale.getDefault())
     }
 }

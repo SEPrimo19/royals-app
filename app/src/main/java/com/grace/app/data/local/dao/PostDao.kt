@@ -28,7 +28,6 @@ interface PostDao {
     @Query("DELETE FROM posts WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    // Reconcile against the server (drop posts that were deleted remotely).
     @Query("DELETE FROM posts WHERE id NOT IN (:keepIds)")
     suspend fun deleteNotIn(keepIds: List<String>)
 

@@ -102,8 +102,6 @@ class AdminRepositoryImpl @Inject constructor(
             return Result.Error("Subject and message are required.")
         }
         return try {
-            // Build the JSON payload by hand — keeps EmailAudience as a
-            // sealed class without dragging in a polymorphic serializer.
             val audienceJson: JsonObject = when (audience) {
                 EmailAudience.All -> buildJsonObject { put("kind", "all") }
                 is EmailAudience.Roles -> buildJsonObject {
@@ -145,13 +143,7 @@ class AdminRepositoryImpl @Inject constructor(
         @SerialName("sent") val sent: Int
     )
 
-    // ---- Bulk fetches for compliance reports ------------------------------
 
-    /**
-     * Embedded-select shape — Postgrest returns the joined `events` row
-     * as an `events` field. The serializer needs an exact field-name match
-     * with the select() string below.
-     */
     @Serializable
     private data class AttendanceWithEventDto(
         @SerialName("user_id") val userId: String,
@@ -167,9 +159,6 @@ class AdminRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to load compliance data.")
         }
         return try {
-            // Embedded select pulls the related event row in ONE round trip.
-            // At hundreds of records this is fine; if volume ever climbs
-            // past ~5k rows, add pagination.
             val rows = supabase.from("event_attendance")
                 .select(io.github.jan.supabase.postgrest.query.Columns.raw(
                     "user_id, attended_at, status, late_by_minutes, events(*)"

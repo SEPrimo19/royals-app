@@ -36,8 +36,6 @@ data class HomeUiState(
     val userName: String = "",
     val greeting: String = "Welcome",
     val streak: Int = 0,
-    // Games streak (independent of devo streak) — surfaces under the
-    // Bible Games quick-action card. 0 if the user has never played.
     val gameStreak: Int = 0,
     val todayDevotional: Devotional? = null,
     val devoDone: Boolean = false,
@@ -46,7 +44,8 @@ data class HomeUiState(
     val myLeader: User? = null,
     val offlineVerseText: String? = null,
     val offlineVerseRef: String? = null,
-    val isOnline: Boolean = true
+    val isOnline: Boolean = true,
+    val justCameOnline: Boolean = false
 )
 
 @HiltViewModel
@@ -67,15 +66,11 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState(greeting = greetingForNow()))
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // Server-driven fetches that need to re-fire on screen entry. Long-lived
-    // reactive observers (name, streak, network, devo-done) are wired once in
-    // init below and stay alive — we only restart the ones that pull from
-    // Supabase so server-side changes (admin actions, spotlight swap) reach
-    // the dashboard without an app restart.
     private val serverFetchJobs = mutableListOf<Job>()
 
+    private var onlinePillJob: Job? = null
+
     init {
-        // Reactive observers — set up once, never restarted.
         viewModelScope.launch {
             prefs.userName.collect { name ->
                 _uiState.update { it.copy(userName = name ?: "") }
@@ -87,13 +82,27 @@ class HomeViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            var wasOnline: Boolean? = null
             networkMonitor.networkState.collect { online ->
-                _uiState.update { it.copy(isOnline = online) }
+                val cameBackOnline = wasOnline == false && online
+                wasOnline = online
+                _uiState.update {
+                    it.copy(
+                        isOnline = online,
+                        justCameOnline = if (cameBackOnline) true
+                            else it.justCameOnline && online
+                    )
+                }
+                if (cameBackOnline) {
+                    loadServerData()
+                    onlinePillJob?.cancel()
+                    onlinePillJob = viewModelScope.launch {
+                        kotlinx.coroutines.delay(3000)
+                        _uiState.update { it.copy(justCameOnline = false) }
+                    }
+                }
             }
         }
-        // Whether today's devotional was completed — drives the Home ring and
-        // the "✓ Completed today" label. Reacts to: user changing OR the
-        // current devotional changing OR the progress row being upserted.
         @OptIn(ExperimentalCoroutinesApi::class)
         viewModelScope.launch {
             combine(
@@ -112,7 +121,6 @@ class HomeViewModel @Inject constructor(
         loadServerData()
     }
 
-    /** Re-fires the server-backed fetches. Called from HomeScreen on entry. */
     fun refresh() = loadServerData()
 
     private fun loadServerData() {
@@ -133,8 +141,6 @@ class HomeViewModel @Inject constructor(
             }
         }
         serverFetchJobs += viewModelScope.launch {
-            // Bible Games streak — best-effort, doesn't block the Home
-            // render. Falls back to 0 if the user has never played.
             val r = getMyGameStatsUseCase()
             if (r is Result.Success) {
                 _uiState.update { it.copy(gameStreak = r.data.currentStreak) }
@@ -155,7 +161,6 @@ class HomeViewModel @Inject constructor(
             }
         }
         serverFetchJobs += viewModelScope.launch {
-            // Random cached verse for the offline banner — re-rolls on refresh.
             val verses = verseDao.getAll().first()
             verses.randomOrNull()?.let { v ->
                 _uiState.update {

@@ -49,8 +49,6 @@ fun LeaderScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Re-fetch leaders + check-in status each time the screen enters — the VM
-    // persists across bottom-bar tabs so init only fires once.
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refresh() }
 
     Column(
@@ -58,18 +56,12 @@ fun LeaderScreen(
             .fillMaxSize()
             .background(GraceDeepBlue)
     ) {
-        // MenuButtonRow owns its 16dp-from-edge contract — must sit OUTSIDE
-        // the horizontally-padded content column below.
         MenuButtonRow(onOpenMenu)
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Text("My Leaders 🤝", color = GraceCream, fontSize = 26.sp)
         Text("Real mentorship. Real people.", color = GraceCreamDim, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
 
-        // Form is ALWAYS visible (audit-item #5). If the user has already
-        // submitted this week, the answers are pre-filled and the submit
-        // button reads "Update ✓" — same row UPSERTs server-side until
-        // Monday rolls over, at which point a fresh form appears.
         CheckInCard(state, viewModel)
         Spacer(Modifier.height(16.dp))
 
@@ -84,7 +76,7 @@ fun LeaderScreen(
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
-        }  // inner padded Column
+        }
     }
 }
 
@@ -154,8 +146,6 @@ private fun CheckInCard(state: LeaderUiState, viewModel: LeaderViewModel) {
                 if (state.checkInStep < 2) {
                     TextButton(
                         onClick = { viewModel.onEvent(LeaderEvent.NextCheckInStep) },
-                        // Block "Next" too if the current answer is blank —
-                        // forces the user to type something before moving on.
                         enabled = state.checkInAnswers[state.checkInStep].isNotBlank()
                     ) { Text("Next", color = GracePurple) }
                 } else {
@@ -206,10 +196,6 @@ private fun LeaderRow(leader: User) {
                     fontSize = 11.sp
                 )
             }
-            // Messenger is now the only outreach channel. If the leader
-            // hasn't published their Messenger link we surface a quiet
-            // "No Messenger" pill instead of a clickable button — clearer
-            // than a dead-tap.
             if (canMessage) {
                 Text(
                     "💬 Messenger",

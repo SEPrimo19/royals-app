@@ -1,15 +1,3 @@
--- =============================================================================
--- GRACE — Bible Games v4: SECURITY DEFINER RPC for leaderboards
---
--- The base `game_attempts` RLS hides other users' rows from regular members
--- (own-rows only). That's correct for the raw table but breaks the leaderboard
--- view — a member would see only their own line. This RPC bypasses RLS for
--- AGGREGATED reads only, returning per-user totals without exposing the
--- individual attempt rows. Members can read their own group; leaders can
--- read any group.
---
--- Safe to re-run.
--- =============================================================================
 
 CREATE OR REPLACE FUNCTION get_weekly_group_leaderboard(
   p_group_id UUID,
@@ -62,6 +50,5 @@ BEGIN
 END;
 $$;
 
--- Lock down PUBLIC; only authenticated users can call.
 REVOKE ALL ON FUNCTION get_weekly_group_leaderboard(UUID, INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_weekly_group_leaderboard(UUID, INTEGER) TO authenticated;

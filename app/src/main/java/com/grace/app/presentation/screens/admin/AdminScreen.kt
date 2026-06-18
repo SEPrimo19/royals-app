@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grace.app.domain.model.User
 import com.grace.app.domain.model.UserRole
+import com.grace.app.presentation.theme.GraceBlue
 import com.grace.app.presentation.theme.GraceCardBg
 import com.grace.app.presentation.theme.GraceCream
 import com.grace.app.presentation.theme.GraceCreamDim
@@ -62,7 +64,6 @@ fun AdminScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var toast by remember { mutableStateOf<String?>(null) }
 
-    // Auto-dismiss toasts after 2.5s.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -137,6 +138,32 @@ fun AdminScreen(
             placeholder = { Text("Search name or email…", color = GraceCreamDim) }
         )
 
+        Spacer(Modifier.height(10.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(AdminFilter.values().toList(), key = { it.name }) { f ->
+                    FilterChip(
+                        label = f.label,
+                        selected = state.filter == f,
+                        onClick = {
+                            viewModel.onEvent(AdminEvent.FilterChanged(f))
+                        }
+                    )
+                }
+            }
+            Spacer(Modifier.size(8.dp))
+            SortToggle(
+                ascending = state.sortAsc,
+                onToggle = { viewModel.onEvent(AdminEvent.ToggleSortDirection) }
+            )
+        }
+
         if (toast != null) {
             Spacer(Modifier.height(8.dp))
             Text(toast!!, color = if (toast!!.startsWith("✓")) GraceGreen else GraceRose)
@@ -171,7 +198,6 @@ fun AdminScreen(
         }
     }
 
-    // Confirmation dialog for role changes.
     state.pendingUpdate?.let { p ->
         AlertDialog(
             onDismissRequest = { viewModel.onEvent(AdminEvent.CancelRoleChange) },
@@ -210,9 +236,6 @@ fun AdminScreen(
 
 @Composable
 private fun UserRow(user: User, onTap: () -> Unit) {
-    // Whole row is the tap target → opens AdminUserDetailScreen. Role
-    // change lives there now (clearer flow + makes room for the Compassion
-    // info that doesn't fit in a list row).
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -240,8 +263,6 @@ private fun UserRow(user: User, onTap: () -> Unit) {
                     Text(user.name.ifBlank { "—" }, color = GraceCream, fontSize = 15.sp)
                     if (user.isCompassion) {
                         Spacer(Modifier.size(6.dp))
-                        // Tiny CP badge so admins can scan the list for
-                        // Compassion participants without opening each row.
                         Text(
                             "CP", color = GraceGold,
                             fontSize = 9.sp, fontWeight = FontWeight.Bold,
@@ -256,7 +277,6 @@ private fun UserRow(user: User, onTap: () -> Unit) {
                 }
                 Text(user.email, color = GraceCreamDim, fontSize = 11.sp)
             }
-            // Read-only role pill — tap row to edit in detail screen.
             Text(
                 user.role.label,
                 color = roleColor(user.role),
@@ -273,10 +293,42 @@ private fun UserRow(user: User, onTap: () -> Unit) {
     }
 }
 
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (selected) GraceDeepBlue else GraceCream,
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        modifier = Modifier
+            .background(
+                if (selected) GraceGold else GraceCardBg,
+                RoundedCornerShape(50)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun SortToggle(ascending: Boolean, onToggle: () -> Unit) {
+    Text(
+        if (ascending) "A↓Z" else "Z↓A",
+        color = GraceGold,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .background(GraceGold.copy(alpha = 0.15f), RoundedCornerShape(50))
+            .clickable { onToggle() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    )
+}
+
 @androidx.compose.runtime.Composable
 private fun roleColor(role: UserRole): Color = when (role) {
     UserRole.MEMBER -> GraceMuted
     UserRole.CELL_LEADER -> GraceGreen
+    UserRole.COUNCIL -> GraceBlue
     UserRole.YOUTH_PRESIDENT -> GracePurple
     UserRole.PASTOR -> GraceGold
     UserRole.ADMIN -> GraceRose

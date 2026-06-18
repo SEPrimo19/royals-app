@@ -91,17 +91,24 @@ class LeaderRepositoryImpl @Inject constructor(
                 .select { filter { eq("id", groupId) } }
                 .decodeSingleOrNull<GroupDto>()?.leaderId
         }.getOrNull()
-        // Once-per-ISO-week with edit: the DB has a UNIQUE (user_id, week_start)
-        // constraint and a trigger that fills week_start from submitted_at.
-        // UPSERT targeting that constraint means first submit inserts, every
-        // subsequent submit this week updates the same row.
         supabase.from("checkins").upsert(
             CheckinInsertDto(me, leaderId, answers),
             onConflict = "user_id,week_start"
         )
         Result.Success(Unit)
     } catch (e: Exception) {
-        Result.Error("Couldn't submit your check-in.", e)
+        val raw = e.message.orEmpty()
+        val hint = when {
+            raw.contains("42P10") || raw.contains("ON CONFLICT") ->
+                " (DB missing the week_start unique constraint — " +
+                    "ask admin to run feature-checkins-once-per-week.sql.)"
+            raw.contains("row-level security", true) ||
+                raw.contains("42501") ->
+                " (Permission denied by RLS.)"
+            else -> ""
+        }
+        val tail = raw.take(160).ifBlank { "no detail from server" }
+        Result.Error("Couldn't submit your check-in: $tail$hint", e)
     }
 
     override suspend fun hasCheckedInThisWeek(): Result<Boolean> {
@@ -120,9 +127,6 @@ class LeaderRepositoryImpl @Inject constructor(
                 .decodeList<kotlinx.serialization.json.JsonObject>()
             Result.Success(rows.isNotEmpty())
         } catch (_: Exception) {
-            // Soft-fail to "not checked in" — at worst the user sees the form
-            // an extra time; UPSERT still de-dupes server-side via the unique
-            // (user_id, week_start) constraint.
             Result.Success(false)
         }
     }
@@ -147,21 +151,14 @@ class LeaderRepositoryImpl @Inject constructor(
         }
     }
 
-    /**
-     * The Monday of this ISO week as "YYYY-MM-DD" — matches what the server
-     * trigger writes via `date_trunc('week', ...)::date`. Computed in the
-     * default JVM time zone, which on Android matches the user's wall
-     * clock and aligns with how the server boundary feels to them.
-     */
     private fun currentMondayIsoDate(): String {
         val monday = java.time.LocalDate.now()
             .with(java.time.temporal.TemporalAdjusters.previousOrSame(
                 java.time.DayOfWeek.MONDAY
             ))
-        return monday.toString()  // ISO_LOCAL_DATE → "YYYY-MM-DD"
+        return monday.toString()
     }
 
-    // ---- LEADER-SIDE DIRECTORY -------------------------------------------
 
     override suspend fun getMyMentees(): Result<List<Mentee>> {
         val me = currentUid()
@@ -171,7 +168,6 @@ class LeaderRepositoryImpl @Inject constructor(
         }
         return try {
             val myRole = (prefs.userRole.first() ?: "member").lowercase()
-            // Step 1 — figure out which members this leader mentors.
             val mentees: List<UserDto> = when (myRole) {
                 "cell_leader" -> {
                     val myGroups = supabase.from("groups")
@@ -193,12 +189,10 @@ class LeaderRepositoryImpl @Inject constructor(
                         .select { filter { eq("role", "member") } }
                         .decodeList<UserDto>()
                 }
-                else -> emptyList() // not a leader — empty list, not an error
+                else -> emptyList()
             }
             if (mentees.isEmpty()) return Result.Success(emptyList())
 
-            // Pull check-ins addressed to me (or all, for senior leaders) so
-            // each row can show "📋 Check-in 2d ago" without N+1 round trips.
             val allCheckins = runCatching {
                 supabase.from("checkins")
                     .select {
@@ -213,8 +207,6 @@ class LeaderRepositoryImpl @Inject constructor(
                 .groupBy { it.userId }
                 .mapValues { it.value.first() }
 
-            // Sort: members with a recent check-in first (so the leader
-            // sees who's been engaging); ties fall back to alphabetical.
             val result = mentees.map { dto ->
                 val checkin = checkInByMentee[dto.id]
                 Mentee(
@@ -265,7 +257,6 @@ class LeaderRepositoryImpl @Inject constructor(
         }
     }
 
-    /** Parse Supabase timestamptz to local-zone LocalDateTime. */
     private fun parseIsoToLocal(iso: String): java.time.LocalDateTime? = runCatching {
         OffsetDateTime.parse(iso)
             .atZoneSameInstant(java.time.ZoneId.systemDefault())
@@ -285,9 +276,6 @@ class LeaderRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to record attendance.")
         }
         return try {
-            // INSERT with posted_by_proxy = me. The trigger sees the non-null
-            // proxy field and skips the window/late-computation logic — our
-            // explicit status + (defaulted-to-0) late_by_minutes stand.
             val dbStatus = when (status) {
                 com.grace.app.domain.model.AttendanceStatus.PRESENT -> "present"
                 com.grace.app.domain.model.AttendanceStatus.LATE -> "late"
@@ -305,8 +293,6 @@ class LeaderRepositoryImpl @Inject constructor(
             )
             Result.Success(Unit)
         } catch (e: Exception) {
-            // Most likely "duplicate key" if the member already has a row,
-            // or RLS denial. Surface a clear message either way.
             val msg = e.message.orEmpty()
             val friendly = when {
                 msg.contains("duplicate key", ignoreCase = true) ->
@@ -349,9 +335,6 @@ class LeaderRepositoryImpl @Inject constructor(
         return try {
             val myRole = (prefs.userRole.first() ?: "member").lowercase()
             val myGroup = prefs.groupId.first()
-            // Pull cell members (cell_leader scope) or all members (senior).
-            // Includes proxy-only members because they have rows in users
-            // with the same group_id their leader set at registration.
             val members: List<UserDto> = when (myRole) {
                 "cell_leader" -> {
                     if (myGroup.isNullOrBlank()) emptyList()
@@ -373,8 +356,6 @@ class LeaderRepositoryImpl @Inject constructor(
             }
             if (members.isEmpty()) return Result.Success(emptyList())
 
-            // Pull existing attendance rows for this event for all those
-            // members in one shot — no N+1.
             val memberIds = members.map { it.id }
             val attendance = supabase.from("event_attendance")
                 .select {
@@ -386,9 +367,6 @@ class LeaderRepositoryImpl @Inject constructor(
                 .decodeList<com.grace.app.data.remote.supabase.dto.EventAttendanceDto>()
             val attendanceByUser = attendance.associateBy { it.userId }
 
-            // Build Attendee list: members WITH a row get their stored
-            // status; members WITHOUT a row get ABSENT so the UI can show
-            // the "mark them" buttons.
             val result = members.map { dto ->
                 val row = attendanceByUser[dto.id]
                 com.grace.app.domain.model.Attendee(
@@ -401,8 +379,6 @@ class LeaderRepositoryImpl @Inject constructor(
                     lateByMinutes = row?.lateByMinutes ?: 0
                 )
             }.sortedWith(
-                // Show not-yet-attended (ABSENT) at top so leaders can
-                // act on them quickly; attended members fall to the bottom.
                 compareBy<com.grace.app.domain.model.Attendee> {
                     when (it.status) {
                         com.grace.app.domain.model.AttendanceStatus.ABSENT -> 0
@@ -423,16 +399,11 @@ class LeaderRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to load attendance.")
         }
         return try {
-            // RLS gate handles authorization — cell leader for own cell,
-            // senior leader for anyone. We just query event_attendance
-            // filtered to the target member.
             val rows = supabase.from("event_attendance")
                 .select { filter { eq("user_id", memberId) } }
                 .decodeList<com.grace.app.data.remote.supabase.dto.EventAttendanceDto>()
             if (rows.isEmpty()) return Result.Success(emptyList())
 
-            // Batch-fetch the events these rows reference, same pattern as
-            // EventRepository.getMyAttendance.
             val eventIds = rows.map { it.eventId }
             val events = supabase.from("events")
                 .select { filter { isIn("id", eventIds) } }
@@ -441,9 +412,6 @@ class LeaderRepositoryImpl @Inject constructor(
 
             val attended = rows.mapNotNull { row ->
                 val dto = events[row.eventId] ?: return@mapNotNull null
-                // Build the domain Event without RSVP/going-count metadata —
-                // the report doesn't need them and skipping the extra joins
-                // keeps this fast.
                 val event = dto.toEntity().toDomain(
                     myRsvp = null,
                     goingCount = 0,
@@ -485,8 +453,6 @@ class LeaderRepositoryImpl @Inject constructor(
             return Result.Error("Prayer text is too short.")
         }
         return try {
-            // We deliberately set is_anonymous=false; the SQL CHECK rejects
-            // any proxy + anonymous combo anyway, this is defense in depth.
             supabase.from("prayers").insert(
                 com.grace.app.data.remote.supabase.dto.PrayerDto(
                     id = java.util.UUID.randomUUID().toString(),
@@ -564,17 +530,12 @@ class LeaderRepositoryImpl @Inject constructor(
         if (!networkMonitor.isOnline) {
             return Result.Error("You're offline. Connect to register a member.")
         }
-        // The caller's group_id determines which cell the proxy lands in.
-        // Senior leaders may be groupless — they can still proxy-add (the
-        // member just won't be tied to a cell until reassigned).
         val myGroup = prefs.groupId.first()
         if (myGroup.isNullOrBlank() &&
             (prefs.userRole.first() ?: "member").lowercase() == "cell_leader") {
             return Result.Error("You need an assigned cell to register members.")
         }
         return try {
-            // Pre-check email collision — friendlier than letting the unique
-            // constraint blow up. Only check when an email is supplied.
             val cleanEmail = email?.trim()?.takeIf { it.isNotEmpty() }
             if (cleanEmail != null) {
                 val existing = supabase.from("users")

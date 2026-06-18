@@ -14,8 +14,6 @@ private fun parseType(raw: String?): PostType = when (raw?.trim()?.lowercase()) 
 
 fun PostType.toDbValue(): String = name.lowercase()
 
-// reactions/myReaction/commentCount are populated by aggregate queries in
-// Prompt 6; base mappers default them so the model is always complete.
 fun PostDto.toDomain(
     reactions: Map<String, Int> = emptyMap(),
     myReaction: String? = null,

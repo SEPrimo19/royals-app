@@ -64,6 +64,7 @@ private data class RoleOption(val role: UserRole, val emoji: String, val label: 
 private val roleOptions = listOf(
     RoleOption(UserRole.MEMBER, "👤", "Member"),
     RoleOption(UserRole.CELL_LEADER, "🛡️", "Cell Leader"),
+    RoleOption(UserRole.COUNCIL, "⚜️", "Council"),
     RoleOption(UserRole.YOUTH_PRESIDENT, "👑", "Youth President"),
     RoleOption(UserRole.PASTOR, "✝️", "Pastor")
 )
@@ -102,7 +103,6 @@ fun ProfileSetupScreen(
         )
         Spacer(Modifier.height(28.dp))
 
-        // 2×2 role grid
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             roleOptions.chunked(2).forEach { rowItems ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -152,48 +152,52 @@ fun ProfileSetupScreen(
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("Your cell group", color = GraceCreamDim, fontSize = 12.sp)
-        Spacer(Modifier.height(8.dp))
-
-        var expanded by remember { mutableStateOf(false) }
-        val selectedGroupName = state.availableGroups
-            .firstOrNull { it.id == state.selectedGroupId }?.name ?: "Select a group"
-
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded }
-        ) {
-            OutlinedTextField(
-                value = selectedGroupName,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
+        if (state.selectedRole == UserRole.COUNCIL) {
+            Text(
+                "Council officers don't pick a cell group — you'll be tagged as " +
+                    "ministry-wide leadership.",
+                color = GraceCreamDim, fontSize = 12.sp
             )
-            ExposedDropdownMenu(
+        } else {
+            Text("Your cell group", color = GraceCreamDim, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+
+            var expanded by remember { mutableStateOf(false) }
+            val selectedGroupName = state.availableGroups
+                .firstOrNull { it.id == state.selectedGroupId }?.name ?: "Select a group"
+
+            ExposedDropdownMenuBox(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onExpandedChange = { expanded = !expanded }
             ) {
-                state.availableGroups.forEach { group ->
-                    DropdownMenuItem(
-                        text = { Text(group.name) },
-                        onClick = {
-                            viewModel.onEvent(ProfileSetupEvent.GroupSelected(group.id))
-                            expanded = false
-                        }
-                    )
+                OutlinedTextField(
+                    value = selectedGroupName,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    state.availableGroups.forEach { group ->
+                        DropdownMenuItem(
+                            text = { Text(group.name) },
+                            onClick = {
+                                viewModel.onEvent(ProfileSetupEvent.GroupSelected(group.id))
+                                expanded = false
+                            }
+                        )
+                    }
                 }
             }
         }
 
-        // --- Birthdate + Sex (required for Compassion compliance) ------
-        // Optional for non-Compassion users, but always shown so the data
-        // flows into the same place. Same widgets as AddProxyMember so the
-        // visual contract matches.
         Spacer(Modifier.height(20.dp))
         Text(
             "Birthdate",
@@ -221,7 +225,6 @@ fun ProfileSetupScreen(
             color = GraceCreamDim, fontSize = 11.sp
         )
 
-        // --- Compassion section ----------------------------------------
         Spacer(Modifier.height(28.dp))
         CompassionSection(
             isCompassion = state.isCompassion,
@@ -232,7 +235,6 @@ fun ProfileSetupScreen(
             }
         )
 
-        // --- Emergency contact (optional, all users) -------------------
         Spacer(Modifier.height(20.dp))
         Text(
             "Emergency contact (optional)",

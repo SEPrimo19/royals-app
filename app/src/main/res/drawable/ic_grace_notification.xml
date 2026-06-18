@@ -1,20 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Notification small icon.
 
-  Audit-item #9: per user request, this now points at the full Royals
-  logo JPG instead of the previous crown+cross silhouette vector.
 
-  CAVEAT — Android constraint: notification small icons in the status
-  bar are flattened to alpha-only. Any colored bitmap renders as a
-  pure-white shape. Expect the status-bar icon to look like a white
-  square (the bounding box of the JPG). The LARGE notification icon
-  (set in GraceFcmService via setLargeIcon) preserves full color and
-  is unaffected — that's where the visible Royals crest lives in the
-  expanded notification.
 
-  If the white-square look is unacceptable, revert this file to a
-  monochrome silhouette vector (e.g. the prior crown+cross design).
--->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/royals_logo" />

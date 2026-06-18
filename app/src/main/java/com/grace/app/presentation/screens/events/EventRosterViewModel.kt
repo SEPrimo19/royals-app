@@ -18,11 +18,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import javax.inject.Inject
 
-/**
- * Filter chips on the roster screen — narrow the visible list and the PDF
- * export to one slice of statuses. ALL is the default; the others map 1:1
- * to [AttendanceStatus] values for easy filtering.
- */
 enum class RosterFilter(val label: String) {
     ALL("All"),
     PRESENT("Present"),
@@ -35,21 +30,11 @@ data class EventRosterUiState(
     val isLoading: Boolean = true,
     val event: Event? = null,
     val roster: List<Attendee> = emptyList(),
-    // Per-member id set so we can disable individual row buttons while one
-    // mark/undo is in flight — prevents double-taps and racing inserts.
     val inFlightMemberIds: Set<String> = emptySet(),
     val filter: RosterFilter = RosterFilter.ALL,
     val error: String? = null,
-    // Toast-style result message that the screen auto-dismisses.
     val toast: String? = null
 ) {
-    /**
-     * True once the event's check-in window has closed. Used by the screen
-     * to flip the "Not yet marked" pending text to a definitive "Absent"
-     * label for members with no attendance row. Uses event_end_date if
-     * set, otherwise falls back to event_date + 2 hours (matches the
-     * trigger's default in feature-event-attendance.sql).
-     */
     val eventHasEnded: Boolean
         get() {
             val ev = event ?: return false
@@ -57,8 +42,6 @@ data class EventRosterUiState(
             return LocalDateTime.now().isAfter(end)
         }
 
-    /** Apply the current filter to the roster — used by both the LazyColumn
-     *  and the PDF export. */
     val filteredRoster: List<Attendee>
         get() = when (filter) {
             RosterFilter.ALL -> roster
@@ -72,7 +55,6 @@ data class EventRosterUiState(
                 roster.filter { it.status == AttendanceStatus.ABSENT }
         }
 
-    /** Per-status counts for the summary line / chip badges. */
     val counts: Map<AttendanceStatus, Int>
         get() = roster.groupingBy { it.status }.eachCount()
 }

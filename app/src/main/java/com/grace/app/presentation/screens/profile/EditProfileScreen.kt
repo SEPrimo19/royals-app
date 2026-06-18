@@ -56,7 +56,6 @@ fun EditProfileScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var toast by remember { mutableStateOf<String?>(null) }
 
-    // Auto-dismiss toasts after 2.5s.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -70,7 +69,6 @@ fun EditProfileScreen(
             when (fx) {
                 EditProfileEffect.Saved -> {
                     toast = "✓ Profile saved."
-                    // Brief pause so the toast is visible, then close the screen.
                     kotlinx.coroutines.delay(900)
                     onBack()
                 }
@@ -110,7 +108,6 @@ fun EditProfileScreen(
                 CircularProgressIndicator(color = GraceGold)
             }
         } else {
-            // Avatar placeholder — avatar upload is planned for a follow-up.
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier.size(84.dp)
@@ -213,9 +210,6 @@ fun EditProfileScreen(
                 )
             }
 
-            // Birthdate + Sex — required for Compassion compliance, accepted
-            // for all users so the data flows into the same column. Reuses
-            // the shared widgets from components/BirthdateSexFields.kt.
             Spacer(Modifier.height(24.dp))
             SectionHeader("BIRTHDATE")
             Spacer(Modifier.height(6.dp))

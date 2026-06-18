@@ -19,7 +19,6 @@ import javax.inject.Inject
 data class FillInBlankUiState(
     val isLoading: Boolean = true,
     val passage: BiblePassage? = null,
-    /** Options pinned at load time so the order is stable across recomposition. */
     val options: List<String> = emptyList(),
     val selectedOption: String? = null,
     val correct: Boolean = false,
@@ -29,12 +28,10 @@ data class FillInBlankUiState(
     val error: String? = null
 ) {
     val hasAnswered: Boolean get() = selectedOption != null
-    /** Verse text with the blank word replaced for the play view. */
     val verseWithBlank: String?
         get() = passage?.let { p ->
             val token = p.blankWord
             val replaced = p.text.replace(token, BLANK_TOKEN, ignoreCase = false)
-            // Fallback: case-insensitive replace if exact-case missed.
             if (replaced == p.text)
                 p.text.replace(Regex("(?i)" + Regex.escape(token)), BLANK_TOKEN)
             else replaced
@@ -70,9 +67,6 @@ class FillInBlankViewModel @Inject constructor(
                             )
                         }
                     } else {
-                        // Pin the option order once so it stays stable while
-                        // the user thinks — re-shuffling on recomposition
-                        // would feel chaotic.
                         val opts = (passage.distractors + passage.blankWord)
                             .distinct()
                             .shuffled()

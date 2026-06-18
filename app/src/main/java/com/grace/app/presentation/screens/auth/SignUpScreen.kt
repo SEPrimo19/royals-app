@@ -149,7 +149,7 @@ fun SignUpScreen(
         GoogleSignInButton(enabled = !state.isLoading) { result ->
             when (result) {
                 io.github.jan.supabase.compose.auth.composable.NativeSignInResult.Success ->
-                    Unit // MainActivity reactively switches to MAIN_GRAPH
+                    Unit
                 is io.github.jan.supabase.compose.auth.composable.NativeSignInResult.Error ->
                     viewModel.onEvent(SignUpEvent.GoogleSignInFailed(
                         friendlyOAuthError(result.message)

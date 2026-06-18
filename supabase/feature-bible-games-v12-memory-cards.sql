@@ -1,27 +1,9 @@
--- =============================================================================
--- GRACE — Bible Games v12: "Memory Cards" mode (v2, Practice-only)
---
--- Match Bible reference cards with their verse snippet. 6 pairs per board
--- (12 cards on a 3x4 grid). Untimed. Scoring:
---   • +10 pts per matched pair (max 60 for the board)
---   • +30 perfect-clear bonus if zero mismatched flips
---
--- Practice-only for v1 — feeds monthly global leaderboard automatically
--- via a `game_attempts` row (mode = 'memory_match').
---
--- Per the [[who-am-i-shipped]] memory, every new mode needs three things:
---   1. New content table          (memory_card_pairs)
---   2. Widen game_attempts.mode CHECK to include the new mode value
---   3. Add a per-content FK column on game_attempts (pair_id)
--- All three are in this single migration. Safe to re-run.
--- =============================================================================
 
--- ---- TABLE: memory_card_pairs --------------------------------------------
 CREATE TABLE IF NOT EXISTS memory_card_pairs (
   id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  reference      TEXT NOT NULL,            -- e.g. "John 3:16"
-  verse_snippet  TEXT NOT NULL,            -- short, scannable snippet for the card UI
-  full_text      TEXT,                     -- optional full verse (shown on completion if useful)
+  reference      TEXT NOT NULL,
+  verse_snippet  TEXT NOT NULL,
+  full_text      TEXT,
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
   created_by     UUID REFERENCES users(id),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -30,7 +12,6 @@ CREATE TABLE IF NOT EXISTS memory_card_pairs (
 CREATE INDEX IF NOT EXISTS idx_memory_card_pairs_active
   ON memory_card_pairs (is_active) WHERE is_active = TRUE;
 
--- ---- RLS ------------------------------------------------------------------
 ALTER TABLE memory_card_pairs ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "memory_card_pairs_select" ON memory_card_pairs;
@@ -71,7 +52,6 @@ CREATE POLICY "memory_card_pairs_delete" ON memory_card_pairs
     )
   );
 
--- ---- game_attempts: widen mode CHECK + add pair_id FK --------------------
 ALTER TABLE game_attempts
   DROP CONSTRAINT IF EXISTS game_attempts_mode_check;
 
@@ -86,10 +66,6 @@ ALTER TABLE game_attempts
 CREATE INDEX IF NOT EXISTS idx_game_attempts_pair
   ON game_attempts (pair_id) WHERE pair_id IS NOT NULL;
 
--- ---- SEED: 30 verse pairs ------------------------------------------------
--- Snippets are deliberately short (≤ 60 chars) so they fit on a card
--- without wrapping awkwardly. Full text is kept for future "Completed!"
--- reveal screens.
 INSERT INTO memory_card_pairs (reference, verse_snippet, full_text) VALUES
 ('John 3:16',
  'For God so loved the world',
@@ -183,6 +159,3 @@ INSERT INTO memory_card_pairs (reference, verse_snippet, full_text) VALUES
  'Casting all your care upon Him, for He cares for you.')
 ON CONFLICT DO NOTHING;
 
--- Sanity check (run manually):
---   SELECT count(*) FROM memory_card_pairs WHERE is_active;
--- Expected: 30.

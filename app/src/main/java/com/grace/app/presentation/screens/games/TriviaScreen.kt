@@ -1,8 +1,8 @@
 package com.grace.app.presentation.screens.games
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,7 +90,6 @@ fun TriviaScreen(
                 modifier = Modifier.fillMaxWidth().height(4.dp)
             )
         } else if (!state.isDaily && !state.isFinished) {
-            // Practice: lives + countdown timer pinned above the question.
             PracticeHud(
                 lives = state.livesRemaining,
                 seconds = state.timerSeconds,
@@ -98,9 +97,6 @@ fun TriviaScreen(
                 timerFrozen = state.timerFrozen
             )
         }
-        // Lifelines bar — shown while a question is active, hides on
-        // round-finished. Joshua only in Practice (Daily has no timer);
-        // Daniel works in both.
         if (!state.isFinished && state.currentQuestion != null) {
             Spacer(Modifier.height(10.dp))
             LifelinesBar(
@@ -182,14 +178,10 @@ private fun QuestionBody(
     AnimatedVisibility(
         visible = state.hasAnswered,
         enter = fadeIn(),
-        exit = fadeOut()
+        exit = ExitTransition.None
     ) {
         Column {
             Spacer(Modifier.height(8.dp))
-            // Always render the reveal card on answered — even questions
-            // without an explanation get the correct/wrong header + (when
-            // wrong) the explicit "Correct answer: X" reveal so the user
-            // walks away knowing the right answer.
             AnswerRevealCard(
                 question = q,
                 selectedIndex = state.selectedOption,
@@ -210,17 +202,6 @@ private fun QuestionBody(
     }
 }
 
-/**
- * Post-answer reveal card. Three states, all driven by the same data:
- *   - Correct → green "✓ Correct!" header + explanation
- *   - Wrong   → rose "✗ Not quite" header + "The correct answer is: …" +
- *               explanation framed as "Here's why"
- *   - Timed out → orange "⏱ Time's up" header + correct answer + explanation
- *
- * We only have ONE `explanation` per question (schema is one big "why is
- * the correct answer right" field). Per-option rationale would require a
- * schema change — surfaced to the user; not in v1.
- */
 @Composable
 private fun AnswerRevealCard(
     question: BibleQuestion,
@@ -245,7 +226,6 @@ private fun AnswerRevealCard(
         shape = RoundedCornerShape(14.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header: correct/wrong/timed-out status.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(headerEmoji, color = headerColor, fontSize = 18.sp,
                     fontWeight = FontWeight.Bold)
@@ -255,8 +235,6 @@ private fun AnswerRevealCard(
                     fontSize = 14.sp, fontWeight = FontWeight.Bold
                 )
             }
-            // For wrong / timed-out, surface the correct answer plainly
-            // so the user always walks away knowing it.
             if (!isCorrect) {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -271,8 +249,6 @@ private fun AnswerRevealCard(
                     lineHeight = 21.sp
                 )
             }
-            // The general explanation. Framed as "Why?" because it explains
-            // the CORRECT answer specifically (schema only has one field).
             if (!question.explanation.isNullOrBlank()) {
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -328,12 +304,8 @@ private fun OptionRow(
     val answered = state.hasAnswered
     val selected = state.selectedOption == index
     val isCorrect = index == q.correctIndex
-    // Daniel Effect — 50/50 dims this option to ~30% and blocks taps.
     val isEliminated = index in state.eliminatedIndices
 
-    // `timedOut` means no option was picked but the timer hit zero. We
-    // still want to surface the correct answer in green so the player
-    // learns the answer — there's just no selected-wrong-option to color.
     val bg = when {
         !answered -> GraceCardBg
         isCorrect -> GraceGreen.copy(alpha = 0.25f)
@@ -393,8 +365,6 @@ private fun OptionRow(
 @Composable
 private fun FinishedCard(state: TriviaUiState, onExit: () -> Unit) {
     val outOfLives = state.finishedReason == FinishReason.OUT_OF_LIVES
-    // Practice and Daily share the summary card layout but with different
-    // copy: Practice doesn't have "5 of 10" framing, just total answered.
     val attempted = if (state.isDaily) state.questions.size
         else state.currentIndex + (if (state.hasAnswered) 1 else 0)
     val percent = if (attempted == 0) 0 else (state.correctCount * 100 / attempted)
@@ -470,7 +440,6 @@ private fun PracticeHud(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Hearts row — filled for remaining, hollow for spent. 5 max.
         Row {
             repeat(5) { i ->
                 Text(
@@ -481,14 +450,12 @@ private fun PracticeHud(
             }
         }
         if (timerFrozen) {
-            // Joshua Effect — timer is paused for this question.
             Text(
                 "🛡️ FROZEN",
                 color = GraceBlue, fontSize = 12.sp,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
             )
         } else {
-            // Countdown — turns rose under 5s.
             val timerColor = if (seconds <= 5 && !answered) GraceRose else GraceCream
             Text(
                 "⏱ ${seconds}s",

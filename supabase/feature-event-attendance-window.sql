@@ -1,41 +1,15 @@
--- =============================================================================
--- GRACE — Feature: Event QR time-limit + attendance toggle
---
--- Builds on `feature-event-attendance.sql`. Adds:
---
---   1. events.event_end_date          (TIMESTAMPTZ, NULL = use legacy +2h)
---   2. events.requires_attendance     (BOOLEAN, default TRUE)
---   3. event_attendance.status        ('present' or 'late' — computed in trigger)
---   4. event_attendance.late_by_minutes (INTEGER, computed in trigger)
---
--- Behavior (per user spec):
---   - Scan BEFORE event_date        → status='present', late_by_minutes=0
---   - Scan BETWEEN start and end    → status='late',    late_by_minutes=N
---   - Scan AFTER event_end_date     → rejected ("Check-in is closed")
---   - requires_attendance=false     → rejected ("Attendance is off for this event")
---   - "Absent" is NOT stored — it's the creator-roster derivation
---     (RSVP='going' minus actual check-ins), computed on read after the event
---     ends. Storing absent rows would flood the table with church-wide entries.
---
--- Safe to re-run.
--- =============================================================================
 
--- ---- COLUMNS: events --------------------------------------------------------
 ALTER TABLE events
   ADD COLUMN IF NOT EXISTS event_end_date TIMESTAMPTZ;
 ALTER TABLE events
   ADD COLUMN IF NOT EXISTS requires_attendance BOOLEAN NOT NULL DEFAULT TRUE;
 
--- ---- COLUMNS: event_attendance ---------------------------------------------
 ALTER TABLE event_attendance
   ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'present'
     CHECK (status IN ('present','late'));
 ALTER TABLE event_attendance
   ADD COLUMN IF NOT EXISTS late_by_minutes INTEGER NOT NULL DEFAULT 0;
 
--- ---- TRIGGER REPLACEMENT ---------------------------------------------------
--- Computes status + late_by_minutes server-side. The client only reads them.
--- This is the single source of truth — no client-trust for "was I late?".
 CREATE OR REPLACE FUNCTION enforce_attendance_window() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -87,7 +61,6 @@ BEGIN
 END;
 $$;
 
--- Re-bind the trigger to pick up the new function body.
 DROP TRIGGER IF EXISTS trg_enforce_attendance_window ON event_attendance;
 CREATE TRIGGER trg_enforce_attendance_window
   BEFORE INSERT ON event_attendance

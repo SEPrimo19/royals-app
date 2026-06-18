@@ -22,8 +22,12 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -32,9 +36,11 @@ import com.grace.app.presentation.components.GraceButton
 import com.grace.app.presentation.components.GracePullToRefresh
 import com.grace.app.presentation.components.MenuButtonRow
 import com.grace.app.presentation.components.PostCard
+import com.grace.app.presentation.components.biblepicker.BibleVersePicker
 import com.grace.app.presentation.theme.GraceCream
 import com.grace.app.presentation.theme.GraceCreamDim
 import com.grace.app.presentation.theme.GraceDeepBlue
+import com.grace.app.presentation.theme.GraceGold
 import com.grace.app.presentation.theme.GraceGreen
 import com.grace.app.presentation.theme.GraceRose
 
@@ -45,8 +51,6 @@ fun FeedScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Re-fetch + reconcile on every screen entry — the VM persists across tabs,
-    // so init only fires once and we'd otherwise see stale counts / deleted posts.
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refresh() }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.effect.collect { fx ->
@@ -60,13 +64,21 @@ fun FeedScreen(
         viewModel.onEvent(FeedEvent.ImagePicked(uri?.toString()))
     }
 
+    var showBiblePicker by remember { mutableStateOf(false) }
+    if (showBiblePicker) {
+        BibleVersePicker(
+            onDismiss = { showBiblePicker = false },
+            onInsert = { ref, text ->
+                viewModel.onEvent(FeedEvent.InsertScripture(ref, text))
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(GraceDeepBlue)
     ) {
-        // MenuButtonRow owns its 16dp-from-edge contract — must sit OUTSIDE
-        // the horizontally-padded content column below.
         MenuButtonRow(onOpenMenu)
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Row(
@@ -104,12 +116,22 @@ fun FeedScreen(
                         cursorColor = GraceGreen
                     )
                 )
+                if (state.draftText.length > FeedViewModel.MAX_POST_LEN - 800) {
+                    Text(
+                        "${state.draftText.length}/${FeedViewModel.MAX_POST_LEN}",
+                        color = GraceCreamDim,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp, end = 4.dp)
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = state.draftVerseRef ?: "",
                     onValueChange = { viewModel.onEvent(FeedEvent.VerseRefChanged(it)) },
-                    placeholder = { Text("Tag a verse (optional, e.g. John 3:16)") },
+                    placeholder = { Text("Reference, e.g. John 3:16 (or tap 📖 below)") },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = GraceGreen,
                         unfocusedBorderColor = GraceCreamDim,
@@ -131,6 +153,13 @@ fun FeedScreen(
                                     )
                                 )
                             }
+                            .padding(8.dp)
+                    )
+                    Text(
+                        "📖 Add Bible verse",
+                        color = GraceGold,
+                        modifier = Modifier
+                            .clickable { showBiblePicker = true }
                             .padding(8.dp)
                     )
                 }
@@ -178,6 +207,6 @@ fun FeedScreen(
                 }
             }
         }
-        }  // inner padded Column
+        }
     }
 }

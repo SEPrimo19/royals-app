@@ -26,9 +26,7 @@ import javax.inject.Inject
 data class EventsUiState(
     val events: List<Event> = emptyList(),
     val isLoading: Boolean = true,
-    // Drives the "Show QR" creator-only gate on each event card.
     val currentUserId: String? = null,
-    // Drives the "+ Create event" button visibility (cell_leader and up).
     val currentRole: UserRole = UserRole.MEMBER,
     val error: String? = null
 ) {
@@ -38,7 +36,6 @@ data class EventsUiState(
             currentRole == UserRole.PASTOR ||
             currentRole == UserRole.ADMIN
 
-    /** Per-event mod rights: creator, or senior leader. */
     fun canManage(event: Event): Boolean {
         if (event.createdBy != null && event.createdBy == currentUserId) return true
         return currentRole == UserRole.YOUTH_PRESIDENT ||
@@ -109,7 +106,6 @@ class EventsViewModel @Inject constructor(
         }
     }
 
-    /** Re-fetch on each screen entry — the VM persists, so init runs only once. */
     fun refresh() = observeEvents()
 
     fun surfaceError(message: String) {
@@ -137,7 +133,7 @@ class EventsViewModel @Inject constructor(
     private fun rsvp(eventId: String, status: RsvpStatus) {
         viewModelScope.launch {
             when (val r = rsvpToEventUseCase(eventId, status)) {
-                is Result.Success -> observeEvents() // refresh counts + my RSVP
+                is Result.Success -> observeEvents()
                 is Result.Error -> _effect.emit(EventsEffect.ShowError(r.message))
                 Result.Loading -> Unit
             }

@@ -1,21 +1,3 @@
--- =============================================================================
--- GRACE — Security Phase B (PATCH): catch the three proxy-attribution FKs
--- the original migration didn't know about.
---
--- After running the first Phase B SQL, the sanity-check query showed these
--- three were still NO ACTION:
---   event_attendance.posted_by_proxy
---   users.created_by_proxy
---   user_meditation_submissions.submitted_by_proxy
---
--- They were added by Leader Proxy Mode features that hadn't shipped when I
--- wrote the initial migration. Same fix — flip to ON DELETE SET NULL so
--- deleting a leader doesn't FK-violate on their proxy actions; the proxy
--- records survive but the attribution gets nulled.
---
--- Reuses the same defensive helper pattern.
--- Safe to re-run.
--- =============================================================================
 
 CREATE OR REPLACE FUNCTION set_user_fk_null(
   p_table TEXT,

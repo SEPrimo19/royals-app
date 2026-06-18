@@ -97,7 +97,6 @@ private fun PassageBody(
     onFinish: () -> Unit
 ) {
     val passage = state.passage ?: return
-    // Reference chip
     Text(
         "📖 ${passage.reference}",
         color = GraceGold, fontSize = 11.sp,
@@ -111,9 +110,6 @@ private fun PassageBody(
     )
     Spacer(Modifier.height(14.dp))
 
-    // Verse card — shows the verse text with the blank substituted, or
-    // the FULL verse text once the user has answered (so they see the
-    // complete passage with the correct word in context).
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = GraceCardBg),

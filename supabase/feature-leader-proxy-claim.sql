@@ -1,33 +1,7 @@
--- =============================================================================
--- Royals: The Kingdom Builders — Leader Proxy Claim Flow (Phase P.5)
---
--- When a previously proxy-only member finally signs up (matching email),
--- the proxy users row holds the email under UNIQUE constraint — meaning
--- the app's signup code SKIPS creating a duplicate public.users row.
--- That leaves the new auth.users id with NO public.users row at all
--- until this RPC runs. The RPC therefore needs to handle BOTH:
---   (a) caller already has a public.users row (e.g. re-signup after dismiss)
---   (b) caller has no public.users row yet (the skip-at-signup case)
---
--- Either way the proxy row's data + all FKs migrate to caller_id atomically.
---
--- Authorization: SECURITY DEFINER bypasses RLS, but the function itself
--- re-checks that proxy_id is_proxy_only = TRUE AND the proxy's email
--- matches the caller's auth email. Without those guards an attacker could
--- claim arbitrary rows.
---
--- Safe to re-run.
--- =============================================================================
 
--- ---- Convenience: track claim history ---------------------------------------
--- claimed_by_user_id lets us audit which auth_id a proxy was merged into.
--- Not strictly required for the merge (we DELETE the row instead), but the
--- column is useful if we ever switch to soft-delete semantics for an audit
--- log. Nullable, no DEFAULT — meaningless on non-claimed rows.
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS claimed_by_user_id UUID REFERENCES users(id);
 
--- ---- RPC --------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.claim_proxy_record(proxy_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -191,28 +165,9 @@ BEGIN
 END;
 $$;
 
--- Authenticated users can call this — the function self-validates that
--- they're claiming a record matching their own email.
 REVOKE ALL ON FUNCTION public.claim_proxy_record(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.claim_proxy_record(UUID) TO authenticated;
 
--- =============================================================================
--- Helper RPC for pre-signup detection
---
--- During signUp / signIn, the client needs to know whether a proxy-only
--- users row exists with a given email — BEFORE attempting to insert the
--- public.users row (which would otherwise hit a 409 on the UNIQUE email
--- constraint). RLS hides those rows from the just-authenticated user
--- (they can only see themselves + their group), so we expose a
--- SECURITY DEFINER RPC that takes an email and returns a minimal JSON
--- describing any match.
---
--- We deliberately return ONLY id + name + has_compassion + is_proxy_only
--- (no Compassion number, no group_id, no other PII) so a casual attacker
--- can't probe the function to harvest member data. The full record only
--- flows back via claim_proxy_record after the email-match check passes
--- there.
--- =============================================================================
 CREATE OR REPLACE FUNCTION public.find_proxy_by_email(p_email TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -256,7 +211,6 @@ $$;
 REVOKE ALL ON FUNCTION public.find_proxy_by_email(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.find_proxy_by_email(TEXT) TO authenticated;
 
--- ---- Verification (silent on success) ---------------------------------------
 DO $$
 BEGIN
   PERFORM 1 FROM pg_proc WHERE proname = 'claim_proxy_record';

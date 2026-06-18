@@ -17,7 +17,6 @@ interface UserDevoProgressDao {
     )
     suspend fun getProgress(userId: String, devoId: String): UserDevoProgressEntity?
 
-    /** Reactive variant — re-emits when the row appears or is cleared. */
     @Query(
         "SELECT * FROM user_devo_progress WHERE user_id = :userId AND devo_id = :devoId LIMIT 1"
     )

@@ -52,7 +52,6 @@ class EventRepositoryImpl @Inject constructor(
 
     override fun getEvents(): Flow<Result<List<Event>>> = flow {
         CrashReporter.log("getEvents: start; online=${networkMonitor.isOnline}")
-        // Cached emit first — fast paint; RSVP data unknown (count 0) offline.
         val cached = eventDao.getAll().first().map { it.toDomain() }
         CrashReporter.log("getEvents: cached=${cached.size}")
         if (cached.isNotEmpty()) emit(Result.Success(cached))
@@ -63,10 +62,6 @@ class EventRepositoryImpl @Inject constructor(
             return@flow
         }
 
-        // Diagnostic: confirm the Supabase client thinks we're signed in.
-        // If session is null here, the SELECT below will hit RLS as 'anon'
-        // and silently return [] — that's the classic "fresh install,
-        // events exist in DB, empty screen" symptom.
         val sessionPresent = supabase.auth.currentSessionOrNull() != null
         val sessionUid = supabase.auth.currentUserOrNull()?.id
         val prefsUid = prefs.userId.first()
@@ -75,13 +70,8 @@ class EventRepositoryImpl @Inject constructor(
                 "sessionUid=${sessionUid ?: "null"} prefsUid=${prefsUid ?: "null"}"
         )
 
-        // -- Phase 1: pull events from Supabase and persist them. If this
-        //    throws, the user has nothing — log + surface error. --
         val remote = try {
             supabase.from("events")
-                // Newest event first (audit-item #8). Was ASC ("upcoming
-                // first"); user wants the most recently-scheduled event at
-                // the top of the list regardless of past/future.
                 .select { order("event_date", Order.DESCENDING) }
                 .decodeList<EventDto>()
         } catch (e: Throwable) {
@@ -95,10 +85,6 @@ class EventRepositoryImpl @Inject constructor(
         }
         CrashReporter.log("getEvents: supabase returned ${remote.size} events")
 
-        // If Supabase returned zero events but we're signed in, that's
-        // either an RLS denial (session/JWT problem) or an actually-empty
-        // table. Record a non-fatal so we can tell which one when it
-        // happens in the field.
         if (remote.isEmpty() && sessionPresent) {
             CrashReporter.recordNonFatal(
                 IllegalStateException(
@@ -112,22 +98,13 @@ class EventRepositoryImpl @Inject constructor(
         else eventDao.deleteNotIn(remote.map { it.id })
         eventDao.insertAll(remote.map { it.toEntity() })
 
-        // -- Phase 2: emit basic events immediately. If enrichment fails
-        //    below, the user still sees the list. This is the fix for
-        //    "events in Supabase but missing on first install" — previously
-        //    a throw in the rsvp/attendance query skipped this emit. --
         val basic = remote.map { it.toEntity().toDomain() }
         CrashReporter.log("getEvents: emitting basic list with ${basic.size}")
         emit(Result.Success(basic))
 
-        // Re-align local heads-up reminders to whatever the server says is
-        // upcoming. Idempotent (REPLACE per-event), so calling this on every
-        // fetch is safe. Past events are skipped inside the scheduler.
         runCatching { EventReminderScheduler.scheduleAll(appContext, basic) }
             .onFailure { CrashReporter.recordNonFatal(it) }
 
-        // -- Phase 3: best-effort enrichment. Each query is independently
-        //    wrapped so a partial failure doesn't lose the rest. --
         val eventIds = remote.map { it.id }
         val uid = supabase.auth.currentUserOrNull()?.id ?: prefs.userId.first()
 
@@ -165,8 +142,6 @@ class EventRepositoryImpl @Inject constructor(
                 iHaveAttended = dto.id in myAttended
             )
         }
-        // Only re-emit if enrichment actually added something — saves a
-        // recomposition for the common "no RSVPs / not attended" case.
         if (enriched != basic) emit(Result.Success(enriched))
     }.flowOn(Dispatchers.IO)
 
@@ -189,7 +164,6 @@ class EventRepositoryImpl @Inject constructor(
                 .firstOrNull()
 
             when {
-                // Tapping the already-selected status clears the RSVP.
                 existing != null && existing.status == status.toDbValue() ->
                     supabase.from("event_rsvp").delete {
                         filter {
@@ -230,9 +204,6 @@ class EventRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to check in.")
         }
         return try {
-            // Insert with select() so we read back the trigger-computed
-            // status + late_by_minutes. The trigger sets them on NEW before
-            // the row lands, so the returned row already has them.
             val saved = withContext(Dispatchers.IO) {
                 supabase.from("event_attendance")
                     .insert(EventAttendanceDto(eventId = eventId, userId = uid)) {
@@ -250,9 +221,6 @@ class EventRepositoryImpl @Inject constructor(
             if (e is kotlinx.coroutines.CancellationException) throw e
             CrashReporter.log("checkInToEvent failed for $eventId")
             CrashReporter.recordNonFatal(e)
-            // Map the trigger's RAISE EXCEPTION messages to friendlier copy
-            // — they bubble up through Postgrest with the exact text in the
-            // body. Keeping the user-visible string focused.
             val raw = e.message.orEmpty()
             val msg = when {
                 raw.contains("opens 1 hour before", ignoreCase = true) ->
@@ -277,16 +245,10 @@ class EventRepositoryImpl @Inject constructor(
         if (!networkMonitor.isOnline) {
             return Result.Error("You're offline. Connect to view attendees.")
         }
-        // IO-pin the whole pipeline so JSON decoding + filtering never lands
-        // on the main thread. Wrap in a 10s timeout — a stuck socket should
-        // surface as a friendly error, not ANR the QR screen.
         return runCatching {
             withContext(Dispatchers.IO) {
                 withTimeout(ATTENDEES_TIMEOUT_MS) {
                     coroutineScope {
-                        // Fan out the two independent first-hop queries
-                        // (attendees + event lookup for absent-derivation)
-                        // so total latency = max(a,b), not a+b.
                         val attendeesDeferred = async {
                             supabase.from("event_attendance")
                                 .select { filter { eq("event_id", eventId) } }
@@ -319,8 +281,6 @@ class EventRepositoryImpl @Inject constructor(
                         val shouldDeriveAbsent = eventEnded &&
                             event?.requiresAttendance != false
 
-                        // Second fan-out: users-for-present and (optionally)
-                        // RSVP-going-for-absent. Still parallel.
                         val presentUsersDeferred = async {
                             if (attendeeIds.isEmpty()) emptyMap()
                             else supabase.from("users")
@@ -368,18 +328,12 @@ class EventRepositoryImpl @Inject constructor(
                                     status = AttendanceStatus.ABSENT
                                 )
                             }
-                        // Present/late first (sorted by lateness),
-                        // absent at the bottom.
                         present.sortedBy { it.lateByMinutes } + absent
                     }
                 }
             }
         }.fold(
             onSuccess = { Result.Success(it) },
-            // Catch Throwable — covers TimeoutCancellationException,
-            // OutOfMemoryError, NPEs from bad data, etc. The only thing
-            // we deliberately let through is coroutine cancellation
-            // (caller cancelled us — that's not a failure).
             onFailure = { t ->
                 if (t is kotlinx.coroutines.CancellationException &&
                     t !is kotlinx.coroutines.TimeoutCancellationException) throw t
@@ -413,7 +367,6 @@ class EventRepositoryImpl @Inject constructor(
         return try {
             val uid = supabase.auth.currentUserOrNull()?.id ?: prefs.userId.first()
             ?: return Result.Error("Your session expired. Please sign in again.")
-            // ISO-8601 with timezone offset — Postgres timestamptz parses it.
             val isoStart = eventDate.atZone(java.time.ZoneId.systemDefault())
                 .toOffsetDateTime().toString()
             val isoEnd = endDate?.atZone(java.time.ZoneId.systemDefault())
@@ -432,11 +385,8 @@ class EventRepositoryImpl @Inject constructor(
                     )
                 ) { select() }
                 .decodeSingle<EventDto>()
-            // Mirror to Room so the list updates without waiting for refresh.
             eventDao.insertAll(listOf(created.toEntity()))
             val domain = created.toEntity().toDomain()
-            // Schedule the one-shot heads-up for this brand-new event so the
-            // creator doesn't have to wait for the next getEvents() pass.
             runCatching { EventReminderScheduler.scheduleAll(appContext, listOf(domain)) }
             Result.Success(domain)
         } catch (e: Throwable) {
@@ -487,10 +437,7 @@ class EventRepositoryImpl @Inject constructor(
         }
         return try {
             supabase.from("events").delete { filter { eq("id", eventId) } }
-            // Drop the pending reminder — keeps a deleted event from
-            // pinging the user an hour before the now-non-existent start.
             runCatching { EventReminderScheduler.cancel(appContext, eventId) }
-            // Remove from Room so the card disappears immediately on next refresh.
             eventDao.deleteNotIn(eventDao.getAll().first()
                 .map { it.id }.filter { it != eventId })
             Result.Success(Unit)
@@ -500,7 +447,6 @@ class EventRepositoryImpl @Inject constructor(
         }
     }
 
-    /** Maps backend errors specific to event mutations to user-safe copy. */
     private fun crudFriendly(e: Throwable): String = when {
         e.message?.contains("row-level security", ignoreCase = true) == true ->
             "You don't have permission. Leaders only."
@@ -513,13 +459,9 @@ class EventRepositoryImpl @Inject constructor(
         if (!networkMonitor.isOnline) {
             return Result.Error("You're offline. Connect to see your attendance.")
         }
-        // IO-pin + 10s timeout so a slow upstream can't ANR the screen.
         return runCatching {
             withContext(Dispatchers.IO) {
                 withTimeout(ATTENDEES_TIMEOUT_MS) {
-                    // RLS already filters to my rows; the explicit user_id
-                    // filter is belt-and-braces in case policies are ever
-                    // relaxed.
                     val rows = supabase.from("event_attendance")
                         .select { filter { eq("user_id", uid) } }
                         .decodeList<EventAttendanceDto>()
@@ -541,9 +483,6 @@ class EventRepositoryImpl @Inject constructor(
                         val attendedAt = row.attendedAt
                             ?.let {
                                 runCatching {
-                                    // Shift to local TZ first — see
-                                    // parseDateTime() comment for the
-                                    // OffsetDateTime.toLocalDateTime gotcha.
                                     java.time.OffsetDateTime.parse(it)
                                         .atZoneSameInstant(
                                             java.time.ZoneId.systemDefault()
@@ -579,7 +518,6 @@ class EventRepositoryImpl @Inject constructor(
     override suspend fun getEvent(eventId: String): Result<Event?> {
         return try {
             if (!networkMonitor.isOnline) {
-                // Fall back to Room cache if offline — better than nothing.
                 val cached = eventDao.getAll().first()
                     .firstOrNull { it.id == eventId }
                     ?.toDomain()

@@ -1,20 +1,3 @@
-// Fans out an FCM push to every member with a registered fcm_token when
-// a new prayer lands. Invoked by a Supabase Database Webhook (Dashboard →
-// Database → Webhooks; see supabase/feature-prayer-push.sql for setup).
-//
-// Database Webhook payload shape:
-//   {
-//     type: "INSERT" | "UPDATE" | "DELETE",
-//     table: string,
-//     schema: string,
-//     record: { ...new row... },
-//     old_record: { ...old row... } | null
-//   }
-//
-// notif_prayer_enabled lives in DataStore on the client, not in Postgres,
-// so we fan out to every token; GraceFcmService.onMessageReceived checks
-// the local toggle and drops the notification if the user has opted out.
-// The poster's own device is excluded server-side.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ackSkipped, isAlreadyProcessed } from "../_shared/dedup.ts";
@@ -73,7 +56,6 @@ Deno.serve(async (req) => {
     `notify-prayer-posted: type=${payload.type} table=${payload.table}`,
   );
 
-  // Defensive: ignore anything but INSERTs on the prayers table.
   if (payload.type !== "INSERT" || payload.table !== "prayers") {
     return new Response(
       JSON.stringify({ skipped: "non-insert or wrong table" }),
@@ -94,15 +76,11 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  // Idempotency guard — webhook retries shouldn't re-fan-out to every device.
   if (await isAlreadyProcessed(supabase, `notify-prayer-posted:${prayer.id}`)) {
     console.log(`notify-prayer-posted: prayer=${prayer.id} already processed — skip`);
     return ackSkipped("already-processed");
   }
 
-  // Resolve the poster's display name only when needed — anonymous prayers
-  // hide the name regardless of what the DB says, mirroring the client's
-  // anonymous-safeguard pattern.
   let posterName: string | null = null;
   if (!prayer.is_anonymous) {
     const { data } = await supabase
@@ -110,8 +88,6 @@ Deno.serve(async (req) => {
     posterName = (data?.name as string | null) ?? null;
   }
 
-  // Pull every device token EXCEPT the poster's. Service role bypasses RLS,
-  // which is what makes a cross-user fan-out possible.
   const { data: users, error } = await supabase
     .from("users")
     .select("id, fcm_token")
@@ -130,9 +106,6 @@ Deno.serve(async (req) => {
     ? `Someone in your church family needs prayer — ${truncate(prayer.content)}`
     : truncate(prayer.content, 100);
 
-  // Dedupe tokens — multiple accounts on one device share an FCM token, and
-  // without this the same device gets N stacked pushes where N = accounts
-  // on that device. With it, one push per unique device.
   const tokens = Array.from(new Set(
     (users ?? [])
       .map((u) => u.fcm_token as string | null)
@@ -156,8 +129,6 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Fire all sends in parallel — sendFcm swallows individual failures so
-  // one stale token can't poison the batch.
   const results = await Promise.all(
     tokens.map((token) =>
       sendFcm({

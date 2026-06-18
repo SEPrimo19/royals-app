@@ -11,13 +11,6 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Journal entries are encrypted at the application layer before they ever touch
- * Room or Supabase. The AES-256-GCM key lives in the Android Keystore and never
- * leaves the device — not exportable, not readable by any other app or by us.
- *
- * Wire format (base64): [12-byte IV][GCM ciphertext+tag].
- */
 @Singleton
 class JournalCrypto @Inject constructor() {
 
@@ -52,6 +45,12 @@ class JournalCrypto @Inject constructor() {
         return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 
+    fun looksEncrypted(value: String): Boolean = try {
+        Base64.decode(value, Base64.NO_WRAP).size >= IV_SIZE + GCM_TAG_BITS / 8
+    } catch (_: Exception) {
+        false
+    }
+
     fun decrypt(cipherTextBase64: String): String = try {
         val combined = Base64.decode(cipherTextBase64, Base64.NO_WRAP)
         val iv = combined.copyOfRange(0, IV_SIZE)
@@ -60,7 +59,6 @@ class JournalCrypto @Inject constructor() {
         cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
         String(cipher.doFinal(body), Charsets.UTF_8)
     } catch (_: Exception) {
-        // A corrupt/foreign blob must never crash the journal screen.
         ""
     }
 

@@ -1,17 +1,3 @@
--- =============================================================================
--- GRACE — Bible Games v9: "Who Am I?" mode (v2 expansion, Practice-only)
---
--- A new game mode: 4 progressive clues about a biblical character, MCQ
--- answer. Fewer clues used = higher score. Practice-only for v1 — feeds
--- the monthly global leaderboard automatically via a `game_attempts` row
--- (mode = 'who_am_i').
---
--- Scoring:
---   1 clue used → 40 pts · 2 → 25 · 3 → 15 · 4 → 5
---   No daily slot, no streak impact in v1.
---
--- Safe to re-run.
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS bible_characters (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -22,28 +8,24 @@ CREATE TABLE IF NOT EXISTS bible_characters (
   clue_2        TEXT NOT NULL,
   clue_3        TEXT NOT NULL,
   clue_4        TEXT NOT NULL,
-  distractors   JSONB NOT NULL,  -- ["Wrong Name 1","Wrong Name 2","Wrong Name 3"]
+  distractors   JSONB NOT NULL,
   source_ref    TEXT,
-  explanation   TEXT,             -- shown on reveal card
+  explanation   TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
   created_by    UUID REFERENCES users(id),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Useful indices: difficulty filter + is_active scan.
 CREATE INDEX IF NOT EXISTS idx_bible_characters_active
   ON bible_characters(is_active) WHERE is_active = TRUE;
 
--- ---- RLS ---------------------------------------------------------------
 ALTER TABLE bible_characters ENABLE ROW LEVEL SECURITY;
 
--- Anyone authenticated can READ active characters (needed to play).
 DROP POLICY IF EXISTS "bible_characters_select" ON bible_characters;
 CREATE POLICY "bible_characters_select" ON bible_characters
   FOR SELECT
   USING (auth.role() = 'authenticated');
 
--- Only leader+ roles can INSERT / UPDATE / DELETE (curation).
 DROP POLICY IF EXISTS "bible_characters_insert" ON bible_characters;
 CREATE POLICY "bible_characters_insert" ON bible_characters
   FOR INSERT
@@ -77,12 +59,10 @@ CREATE POLICY "bible_characters_delete" ON bible_characters
     )
   );
 
--- ---- SEED: 30 characters across difficulty + testament -----------------
 INSERT INTO bible_characters
   (name, category, difficulty, clue_1, clue_2, clue_3, clue_4, distractors, source_ref, explanation)
 VALUES
 
--- ===== EASY · OLD TESTAMENT (5) =====
 ('Noah','old_testament','easy',
  'I built something massive at God''s command.',
  'It took me about 100 years to finish the build.',
@@ -124,7 +104,6 @@ VALUES
  'Jonah 1-3',
  'Jonah fled God''s call to Nineveh; a great fish swallowed him, then he finally preached and the city repented.'),
 
--- ===== EASY · NEW TESTAMENT (3) =====
 ('Mary (mother of Jesus)','new_testament','easy',
  'An angel told me I was favored by God.',
  'I was betrothed to a carpenter when I conceived.',
@@ -150,7 +129,6 @@ VALUES
  'Matthew 4; 14; 26',
  'Peter (Simon) was renamed by Jesus and famously walked on water; he later preached the first Pentecost sermon.'),
 
--- ===== EASY · CHARACTER (2) =====
 ('Abraham','character','easy',
  'God called me to leave my homeland.',
  'I was 100 years old when my son of promise was born.',
@@ -168,7 +146,6 @@ VALUES
  'Genesis 2-3',
  'Eve was formed from Adam''s rib; deceived by the serpent, she ate from the forbidden tree and shared it with Adam.'),
 
--- ===== MEDIUM · OLD TESTAMENT (3) =====
 ('Joseph (son of Jacob)','old_testament','medium',
  'My father gave me a coat of many colors.',
  'My brothers sold me into slavery for jealousy.',
@@ -194,7 +171,6 @@ VALUES
  '1 Kings 17-19; 2 Kings 2',
  'Elijah challenged Baal''s prophets on Mount Carmel and was taken up to heaven in a whirlwind without dying.'),
 
--- ===== MEDIUM · NEW TESTAMENT (3) =====
 ('Paul','new_testament','medium',
  'I once breathed threats against the church.',
  'A blinding light stopped me on a road.',
@@ -220,7 +196,6 @@ VALUES
  'John 20:24-28',
  'Thomas (called Didymus, "the Twin") doubted the resurrection until Jesus appeared and showed him His wounds.'),
 
--- ===== MEDIUM · CHARACTER (3) =====
 ('Sarah','character','medium',
  'I was beautiful in my old age.',
  'I laughed when angels told me what God would do.',
@@ -246,7 +221,6 @@ VALUES
  'Judges 13-16',
  'Samson, judge of Israel, drew supernatural strength from his Nazirite vow until Delilah''s deception led to his capture.'),
 
--- ===== HARD · OLD TESTAMENT (4) =====
 ('Caleb','old_testament','hard',
  'I was one of 12 spies who scouted Canaan.',
  'Only Joshua and I believed God would give us the land.',
@@ -280,7 +254,6 @@ VALUES
  'Judges 4:17-22',
  'Jael, wife of Heber, drove a tent peg through the temple of the fleeing commander Sisera and ended the battle.'),
 
--- ===== HARD · NEW TESTAMENT (4) =====
 ('Cornelius','new_testament','hard',
  'I was a Roman centurion of the Italian Regiment.',
  'I feared God and gave alms generously.',
@@ -314,7 +287,6 @@ VALUES
  'Acts 6-7',
  'Stephen, the first Christian martyr, saw the Son of Man standing at God''s right hand as he was stoned to death.'),
 
--- ===== HARD · CHARACTER (3) =====
 ('Melchizedek','character','hard',
  'I was a priest of God Most High before the law was given.',
  'I was king of a city later called Jerusalem.',
@@ -342,7 +314,3 @@ VALUES
 
 ON CONFLICT DO NOTHING;
 
--- Sanity check (run manually):
---   SELECT difficulty, count(*) FROM bible_characters
---     WHERE is_active GROUP BY 1 ORDER BY 1;
--- Expected: easy=10, medium=9, hard=11 (≈30 total).

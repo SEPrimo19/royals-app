@@ -20,10 +20,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Per-round options shape — locked once the character loads so the
- * order of MCQ buttons stays stable across recompositions.
- */
 data class WhoAmIOptions(
     val options: List<String>,
     val correctIndex: Int
@@ -34,9 +30,7 @@ data class WhoAmIUiState(
     val characters: List<BibleCharacter> = emptyList(),
     val currentIndex: Int = 0,
     val options: WhoAmIOptions? = null,
-    /** Clues revealed so far: 1..4. Player always sees at least the first. */
     val cluesRevealed: Int = 1,
-    /** Wrong attempts so far (out of 4 maximum). */
     val wrongAttempts: Int = 0,
     val selectedOption: Int? = null,
     val hasAnswered: Boolean = false,
@@ -44,11 +38,8 @@ data class WhoAmIUiState(
     val pointsEarned: Int = 0,
     val totalPoints: Int = 0,
     val correctCount: Int = 0,
-    /** Total characters played in this session (correct + bombed). */
     val charactersPlayed: Int = 0,
-    /** Like Trivia Practice — 5 lives, each character bombed (0 pts) costs 1. */
     val livesRemaining: Int = MAX_LIVES_WAI,
-    /** Daniel Effect — option indices greyed out for this character. */
     val eliminatedIndices: Set<Int> = emptySet(),
     val lifelines: LifelinesState = LifelinesState(),
     val lifelineError: String? = null,
@@ -86,10 +77,6 @@ class WhoAmIViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 🕯️ Daniel Effect — 50/50 over the 4 MCQ options. Joshua doesn't
-     * apply here (no timer). Per-character single-use.
-     */
     fun useDaniel() {
         val s = _uiState.value
         val opts = s.options ?: return
@@ -151,7 +138,6 @@ class WhoAmIViewModel @Inject constructor(
         }
     }
 
-    /** Tap "Next Clue 🔍" without guessing — peels one more clue. */
     fun revealNextClue() {
         val s = _uiState.value
         if (s.hasAnswered) return
@@ -159,17 +145,12 @@ class WhoAmIViewModel @Inject constructor(
         _uiState.update { it.copy(cluesRevealed = it.cluesRevealed + 1) }
     }
 
-    /**
-     * User picks an MCQ option. Right → end round with score by clues used.
-     * Wrong → bump wrongAttempts, peel next clue (if any), let them try
-     * again. Out of attempts (4) → reveal answer with 0 pts.
-     */
     fun selectOption(index: Int) {
         val s = _uiState.value
         val q = s.currentCharacter ?: return
         val opts = s.options ?: return
         if (s.hasAnswered) return
-        if (index in s.eliminatedIndices) return    // Daniel: dead option
+        if (index in s.eliminatedIndices) return
 
         val correct = index == opts.correctIndex
         if (correct) {
@@ -191,9 +172,6 @@ class WhoAmIViewModel @Inject constructor(
             val nextAttempts = s.wrongAttempts + 1
             val maxedOut = nextAttempts >= 4
             if (maxedOut) {
-                // Bombed this character — costs 1 life. Don't decrement
-                // here; do it in [next] so the user sees the reveal first
-                // and lives drop atomically with the round transition.
                 _uiState.update {
                     it.copy(
                         selectedOption = index,
@@ -207,24 +185,20 @@ class WhoAmIViewModel @Inject constructor(
                 }
                 recordAttempt(q.id, correct = false, points = 0)
             } else {
-                // Reveal another clue if any remain, allow retry.
                 _uiState.update {
                     it.copy(
                         wrongAttempts = nextAttempts,
                         cluesRevealed = (it.cluesRevealed + 1).coerceAtMost(4),
-                        selectedOption = null  // clear so the user can pick again
+                        selectedOption = null
                     )
                 }
             }
         }
     }
 
-    /** Move to the next character; reshuffle the pool when exhausted. */
     fun next() {
         val s = _uiState.value
         if (!s.hasAnswered) return
-        // If they bombed this character, spend a life. Then check whether
-        // the run is over BEFORE setting up the next round.
         val livesAfter = if (!s.isCorrect)
             (s.livesRemaining - 1).coerceAtLeast(0)
         else s.livesRemaining
@@ -276,7 +250,6 @@ class WhoAmIViewModel @Inject constructor(
         }
     }
 
-    /** Reset everything and re-fetch the pool — used by "Play Again". */
     fun restart() {
         _uiState.update {
             WhoAmIUiState(isLoading = true)
@@ -286,11 +259,6 @@ class WhoAmIViewModel @Inject constructor(
 
     private fun recordAttempt(characterId: String, correct: Boolean, points: Int) {
         viewModelScope.launch {
-            // The repo writes a game_attempts row with mode = "who_am_i".
-            // isDaily = false because v1 ships Practice-only.
-            // NOTE: pass via characterId (FK to bible_characters), NOT
-            // questionId — that column FKs to bible_questions and would
-            // silently fail every Who-Am-I insert (the bug fixed in v10).
             recordAttemptUseCase(
                 mode = GameMode.WHO_AM_I,
                 characterId = characterId,
@@ -301,7 +269,6 @@ class WhoAmIViewModel @Inject constructor(
         }
     }
 
-    /** Stable per-character MCQ ordering: shuffled once when the round opens. */
     private fun buildOptions(character: BibleCharacter): WhoAmIOptions {
         val opts = character.shuffledOptions()
         val correctIndex = opts.indexOf(character.name).coerceAtLeast(0)

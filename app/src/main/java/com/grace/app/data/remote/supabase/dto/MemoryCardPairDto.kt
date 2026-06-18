@@ -3,7 +3,6 @@ package com.grace.app.data.remote.supabase.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Row shape for `memory_card_pairs`. */
 @Serializable
 data class MemoryCardPairDto(
     @SerialName("id") val id: String,

@@ -8,13 +8,6 @@ import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 
-/**
- * One place that decides "when should the daily reminder workers next fire."
- * Schedules a PeriodicWorkRequest with a 24-hour interval and an
- * initialDelay timed to the user's chosen hour. Re-enqueue with REPLACE
- * whenever the user changes the hour in Settings — KEEP on app start so
- * we don't reset the alignment every cold launch.
- */
 object ReminderScheduler {
 
     fun schedulePrayerReminder(
@@ -44,6 +37,21 @@ object ReminderScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             DevoReminderWorker.UNIQUE_NAME, policy, request
+        )
+    }
+
+    fun scheduleBibleGamesReminder(
+        context: Context,
+        hour: Int,
+        policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
+    ) {
+        val request = PeriodicWorkRequestBuilder<BibleGamesReminderWorker>(
+            24, TimeUnit.HOURS
+        )
+            .setInitialDelay(initialDelayMinutes(hour), TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            BibleGamesReminderWorker.UNIQUE_NAME, policy, request
         )
     }
 

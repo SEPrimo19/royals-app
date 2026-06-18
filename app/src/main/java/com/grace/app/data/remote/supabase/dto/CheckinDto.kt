@@ -3,11 +3,6 @@ package com.grace.app.data.remote.supabase.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * Read shape of a row from the `checkins` table. The leader-side
- * MemberDetail screen decodes these to show the member's most recent
- * weekly check-in answers.
- */
 @Serializable
 data class CheckinDto(
     @SerialName("id") val id: String,

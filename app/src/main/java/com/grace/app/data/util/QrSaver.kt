@@ -19,24 +19,10 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import java.io.File
 import java.io.FileOutputStream
 
-/**
- * Renders + persists QR codes for the Event-attendance feature.
- *
- * The QR data is just a deep link (grace://event-checkin/{id}) so the rendered
- * image is valid forever — printable, shareable, screenshottable.
- *
- * - [saveToGallery] writes to `Pictures/GRACE/` via MediaStore (API 29+).
- *   On older API (26–28) it falls back to the legacy public Pictures dir
- *   (no permission needed below 29 for app-private cache files).
- * - [shareToIntent] writes to the app's cache + emits a FileProvider URI in
- *   an ACTION_SEND intent. Works on all API levels; safe from
- *   FileUriExposedException because of the FileProvider hop.
- */
 object QrSaver {
 
     private const val DEFAULT_SIZE_PX = 1024
 
-    /** Encode a payload + render to an opaque white-bg Bitmap. */
     fun render(payload: String, sizePx: Int = DEFAULT_SIZE_PX): Bitmap {
         val matrix = QRCodeWriter().encode(
             payload, BarcodeFormat.QR_CODE, sizePx, sizePx,
@@ -63,11 +49,6 @@ object QrSaver {
         return bmp
     }
 
-    /**
-     * Save the QR for [payload] into the user's Pictures gallery under
-     * `Pictures/GRACE/<safeName>.png`. Returns the inserted Uri on success
-     * or null on failure (no need to surface specifics — UI just toasts).
-     */
     fun saveToGallery(context: Context, payload: String, displayName: String): Uri? {
         val safeName = sanitize(displayName) + "-" + System.currentTimeMillis()
         val bmp = render(payload)
@@ -93,11 +74,6 @@ object QrSaver {
                 context.contentResolver.update(uri, values, null, null)
                 uri
             } else {
-                // Pre-Q fallback — write into the legacy public Pictures dir.
-                // No runtime permission needed for the app's own cache, but
-                // public Pictures writes do require WRITE_EXTERNAL_STORAGE
-                // on API < 29. We declare it scoped-to-Q below in the
-                // manifest so this just works without prompts on Q+.
                 val dir = File(
                     Environment.getExternalStoragePublicDirectory(
                         Environment.DIRECTORY_PICTURES
@@ -115,11 +91,6 @@ object QrSaver {
         }
     }
 
-    /**
-     * Build an ACTION_SEND chooser intent for [payload]. Writes the PNG
-     * into the app's cache dir and exposes it via FileProvider — works on
-     * all supported API levels without storage permissions.
-     */
     fun shareIntent(
         context: Context,
         payload: String,

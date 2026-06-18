@@ -21,12 +21,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Slimmed Settings now that the kitchen-sink links (My Content / Reminders /
- * Admin / Community shortcuts) have moved into the app-level burger drawer.
- * This screen keeps ONLY account-management concerns: profile, password,
- * notification preferences, privacy + delete account, sign out, about.
- */
 data class SettingsUiState(
     val name: String = "",
     val email: String = "",
@@ -41,8 +35,6 @@ data class SettingsUiState(
     val isWorking: Boolean = false,
     val passwordChangeError: String? = null,
     val passwordChangeSuccess: Boolean = false,
-    // Surfaced when the privileged delete-account Edge Function call fails.
-    // Settings screen should render this as a small rose toast/banner.
     val deleteAccountError: String? = null
 )
 
@@ -106,9 +98,6 @@ class SettingsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            // Check once on screen entry — auth identity rarely changes
-            // mid-session, and a stale "false" would just hide the link
-            // until next app launch which is acceptable.
             val canChange = authRepository.isEmailPasswordUser()
             _uiState.update { it.copy(canChangePassword = canChange) }
         }
@@ -171,11 +160,6 @@ class SettingsViewModel @Inject constructor(
             }
             SettingsEvent.DeleteAccount -> viewModelScope.launch {
                 _uiState.update { it.copy(isWorking = true) }
-                // Phase B: deleteAccount now returns Result.Error on failure
-                // (e.g. Edge Function not deployed, network down) instead of
-                // silently pretending it worked. Surface the error so the
-                // user can retry rather than incorrectly believing their
-                // data is gone.
                 when (val r = authRepository.deleteAccount()) {
                     is Result.Success -> {
                         _effect.emit(SettingsEffect.NavigateToLogin)

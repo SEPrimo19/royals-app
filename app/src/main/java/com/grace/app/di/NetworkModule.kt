@@ -32,10 +32,6 @@ object NetworkModule {
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         install(Auth) {
-            // OAuth callback target (kept as a fallback for the browser flow).
-            // Supabase builds the redirect URL as "$scheme://$host" — must be
-            // whitelisted in Supabase Dashboard → Auth → URL Configuration →
-            // Redirect URLs AND match the intent-filter in AndroidManifest.
             scheme = "grace"
             host = "login-callback"
         }
@@ -43,10 +39,6 @@ object NetworkModule {
         install(Realtime)
         install(Storage)
         install(Functions)
-        // Native Google One Tap. `serverClientId` is the Google **Web** OAuth
-        // client ID (the same one entered in Supabase's Google provider).
-        // When blank, the button will surface a clear "Google sign-in isn't
-        // configured" error instead of crashing.
         install(ComposeAuth) {
             googleNativeLogin(serverClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID)
         }
@@ -56,9 +48,6 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
-        // bible-api.com is public; no Authorization header needed. When/if you
-        // swap in a licensed NKJV provider, conditionally add the auth header
-        // here based on BuildConfig.BIBLE_API_KEY being non-empty.
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(
                 HttpLoggingInterceptor().apply {

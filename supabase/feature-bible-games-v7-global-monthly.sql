@@ -1,21 +1,3 @@
--- =============================================================================
--- GRACE — Bible Games v7: global monthly leaderboard RPC
---
--- Adds a SECOND leaderboard alongside the existing weekly cell-group one:
---
---   • Weekly cell-group  — unchanged, still in get_weekly_group_leaderboard.
---     Daily-only points, resets every Monday 00:00.
---
---   • Global monthly     — new in this file (get_monthly_global_leaderboard).
---     ALL users across the church. Counts BOTH Daily Challenge AND Practice
---     points (per spec). Resets on the 1st of each calendar month at 00:00.
---
--- Same SECURITY DEFINER pattern as the weekly RPC — needed to bypass the
--- `game_attempts` own-row RLS so the aggregate read works for everyone,
--- without leaking individual attempt rows.
---
--- Safe to re-run.
--- =============================================================================
 
 CREATE OR REPLACE FUNCTION get_monthly_global_leaderboard(
   p_limit INTEGER DEFAULT 25
@@ -65,7 +47,3 @@ $$;
 REVOKE ALL ON FUNCTION get_monthly_global_leaderboard(INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION get_monthly_global_leaderboard(INTEGER) TO authenticated;
 
--- Sanity check (run manually):
---   SELECT * FROM get_monthly_global_leaderboard(10);
--- Expected: one row per user with any points this calendar month,
--- ordered by total points desc.

@@ -35,20 +35,15 @@ import com.grace.app.presentation.theme.GraceDeepBlue
 import com.grace.app.presentation.theme.GraceGold
 import com.grace.app.presentation.theme.GraceRose
 
-/**
- * Side drawer surfaced via the burger icon in the top app bar. Replaces the
- * old kitchen-sink Settings screen as the primary nav for community shortcuts,
- * reminder times, leader tools, and admin tools — keeping Settings itself
- * focused on account-management only (Edit Profile / Change Password / etc.).
- *
- * Every nav action closes the drawer BEFORE navigating so the user lands on
- * the new screen with no drawer overlay still animating out.
- */
 @Composable
 fun AppDrawer(
     onCloseDrawer: () -> Unit,
     onOpenEditProfile: () -> Unit,
+    onOpenBible: () -> Unit,
+    onOpenStudyNotes: () -> Unit,
     onOpenLifeGroup: () -> Unit,
+    onOpenFindCell: () -> Unit,
+    onOpenDiscipleship: () -> Unit,
     onOpenMyContent: () -> Unit,
     onOpenMyAttendance: () -> Unit,
     onOpenMyProgress: () -> Unit,
@@ -61,9 +56,6 @@ fun AppDrawer(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Helper to close the drawer first, then invoke the navigate lambda.
-    // Without this the drawer animates out while the new screen builds and
-    // the first frame of the destination flickers behind the scrim.
     val nav: (() -> Unit) -> () -> Unit = { action ->
         { onCloseDrawer(); action() }
     }
@@ -88,8 +80,15 @@ fun AppDrawer(
             )
 
             Spacer(Modifier.height(20.dp))
+            SectionHeader("SCRIPTURE")
+            DrawerLink("📖", "Bible (KJV)", onTap = nav(onOpenBible))
+            DrawerLink("📝", "My Study Notes", onTap = nav(onOpenStudyNotes))
+
+            Spacer(Modifier.height(20.dp))
             SectionHeader("MY CONTENT")
             DrawerLink("🏘️", "My Life Group", onTap = nav(onOpenLifeGroup))
+            DrawerLink("🤝", "Find a Cell", onTap = nav(onOpenFindCell))
+            DrawerLink("🌱", "Discipleship", onTap = nav(onOpenDiscipleship))
             DrawerLink("📖", "My Content", onTap = nav(onOpenMyContent))
             DrawerLink("✅", "My Attendance", onTap = nav(onOpenMyAttendance))
             DrawerLink("📈", "My Progress", onTap = nav(onOpenMyProgress))
@@ -109,6 +108,16 @@ fun AppDrawer(
                 onDecrement = { viewModel.setPrayerReminderHour(state.prayerReminderHour - 1) },
                 onIncrement = { viewModel.setPrayerReminderHour(state.prayerReminderHour + 1) }
             )
+            ReminderRow(
+                label = "Bible Games",
+                hour = state.bibleGamesReminderHour,
+                onDecrement = {
+                    viewModel.setBibleGamesReminderHour(state.bibleGamesReminderHour - 1)
+                },
+                onIncrement = {
+                    viewModel.setBibleGamesReminderHour(state.bibleGamesReminderHour + 1)
+                }
+            )
 
             if (state.isLeader) {
                 Spacer(Modifier.height(20.dp))
@@ -125,7 +134,6 @@ fun AppDrawer(
             }
 
             Spacer(Modifier.height(28.dp))
-            // Footer divider + Settings.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

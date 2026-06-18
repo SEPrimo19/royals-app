@@ -1,30 +1,8 @@
--- =============================================================================
--- GRACE — Bible Games v13: "Verse Scramble" mode (v2, Practice-only)
---
--- Tap-to-place reconstruction of a scripture verse word by word. 5 verses
--- per round. Score:
---   • +30 pts per correctly assembled verse (150 base for 5)
---   • +10 perfect-first-try bonus per verse (zero wrong taps) → up to 200/round
---
--- Practice-only for v1, feeds monthly global leaderboard via game_attempts
--- (mode = 'verse_scramble').
---
--- Per the [[who-am-i-shipped]] new-mode checklist, this migration contains
--- all three things every new mode needs:
---   1. New content table        (bible_verse_scrambles)
---   2. Widen game_attempts.mode CHECK to add 'verse_scramble'
---   3. Add a per-content FK column on game_attempts (scramble_id)
---
--- Safe to re-run.
--- =============================================================================
 
--- ---- TABLE: bible_verse_scrambles ----------------------------------------
 CREATE TABLE IF NOT EXISTS bible_verse_scrambles (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  reference   TEXT NOT NULL,           -- e.g. "Psalm 23:1"
-  text        TEXT NOT NULL,           -- the verse exactly as it should be assembled
-  -- Stored word count helps the client filter long verses without scanning
-  -- the text. Kept generated to stay in sync with text edits.
+  reference   TEXT NOT NULL,
+  text        TEXT NOT NULL,
   word_count  INTEGER GENERATED ALWAYS AS (
     array_length(string_to_array(btrim(text), ' '), 1)
   ) STORED,
@@ -36,7 +14,6 @@ CREATE TABLE IF NOT EXISTS bible_verse_scrambles (
 CREATE INDEX IF NOT EXISTS idx_bible_verse_scrambles_active
   ON bible_verse_scrambles (is_active, word_count) WHERE is_active = TRUE;
 
--- ---- RLS ------------------------------------------------------------------
 ALTER TABLE bible_verse_scrambles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "bible_verse_scrambles_select" ON bible_verse_scrambles;
@@ -77,7 +54,6 @@ CREATE POLICY "bible_verse_scrambles_delete" ON bible_verse_scrambles
     )
   );
 
--- ---- game_attempts: widen mode CHECK + add scramble_id FK ----------------
 ALTER TABLE game_attempts
   DROP CONSTRAINT IF EXISTS game_attempts_mode_check;
 
@@ -92,7 +68,6 @@ ALTER TABLE game_attempts
 CREATE INDEX IF NOT EXISTS idx_game_attempts_scramble
   ON game_attempts (scramble_id) WHERE scramble_id IS NOT NULL;
 
--- ---- SEED: 20 well-known short verses (≤12 words) ------------------------
 INSERT INTO bible_verse_scrambles (reference, text) VALUES
 ('Psalm 23:1',         'The Lord is my shepherd I shall not want'),
 ('1 John 4:8',         'God is love'),
@@ -116,6 +91,3 @@ INSERT INTO bible_verse_scrambles (reference, text) VALUES
 ('Hebrews 13:8',       'Jesus Christ is the same yesterday today and forever')
 ON CONFLICT DO NOTHING;
 
--- Sanity check (run manually):
---   SELECT count(*), avg(word_count) FROM bible_verse_scrambles WHERE is_active;
--- Expected: 20 rows, average ~8 words/verse.

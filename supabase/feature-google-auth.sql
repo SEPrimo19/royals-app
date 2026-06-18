@@ -1,21 +1,3 @@
--- =============================================================================
--- GRACE — Feature: Google Sign-in / Signup
---
--- The OAuth flow only creates an `auth.users` row. This trigger mirrors that
--- into `public.users` so the app's domain model lights up immediately (role,
--- name, etc.) without the client having to detect "first-time Google user"
--- and INSERT manually.
---
--- The trigger is SECURITY DEFINER so it can write to public.users regardless
--- of the calling user's RLS — necessary because at INSERT time the row
--- doesn't exist yet and policies can't pass.
---
--- Safe to re-run. ON CONFLICT DO NOTHING avoids clobbering an existing row
--- (e.g., a member who previously signed up with email/password then linked
--- a Google identity).
---
--- Run in: Supabase Dashboard → SQL Editor → paste → Run.
--- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$

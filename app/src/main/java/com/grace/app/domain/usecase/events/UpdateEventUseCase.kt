@@ -25,7 +25,6 @@ class UpdateEventUseCase @Inject constructor(
         if (endDate != null && !endDate.isAfter(eventDate)) {
             return Result.Error("End time must be after the start time.")
         }
-        // Edit allows past dates — useful for correcting a typo on a past event.
         return eventRepository.updateEvent(
             eventId = eventId,
             title = cleanTitle,

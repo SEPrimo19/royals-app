@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark, no action bar. Window background matches GraceDeepBlue so there
-         is no light flash before Compose draws. Colors are owned by GraceTheme. -->
     <style name="Theme.GRACE" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/grace_deep_blue</item>
         <item name="android:statusBarColor">@color/grace_deep_blue</item>

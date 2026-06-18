@@ -8,6 +8,7 @@ import com.grace.app.data.datastore.SecureTokenStore
 import com.grace.app.data.datastore.UserPreferencesRepo
 import com.grace.app.data.remote.supabase.dto.GroupDto
 import com.grace.app.data.remote.supabase.dto.UserDto
+import com.grace.app.data.remote.supabase.dto.mapper.parseRoleString
 import com.grace.app.data.remote.supabase.dto.mapper.toDomain
 import com.grace.app.data.util.CrashReporter
 import com.grace.app.domain.model.Group
@@ -43,12 +44,6 @@ class AuthRepositoryImpl @Inject constructor(
     private val networkMonitor: com.grace.app.data.util.NetworkMonitor
 ) : AuthRepository {
 
-    /**
-     * Kick off a one-shot drain. Called after sign-in so a same-session
-     * sign-out → sign-in flow doesn't leave queued offline posts orphaned
-     * (NetworkMonitor only fires on connectivity TRANSITIONS, which never
-     * happens during in-app account switching).
-     */
     private fun enqueueOfflineDrain() {
         WorkManager.getInstance(context).enqueueUniqueWork(
             OfflineSyncWorker.UNIQUE_NAME,
@@ -57,18 +52,7 @@ class AuthRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun parseRole(raw: String?): UserRole = when (raw?.trim()?.lowercase()) {
-        "cell_leader" -> UserRole.CELL_LEADER
-        "youth_president" -> UserRole.YOUTH_PRESIDENT
-        "pastor" -> UserRole.PASTOR
-        "admin" -> UserRole.ADMIN
-        else -> UserRole.MEMBER
-    }
 
-    // Maps raw Supabase/network failures to messages safe to show a youth user.
-    // The "else" branches now include the raw status + message — keeps the
-    // UI honest about unmapped errors instead of swallowing them. Trim long
-    // messages so the screen doesn't overflow.
     private fun friendlyError(e: Throwable): String = when (e) {
         is RestException -> when (e.statusCode) {
             400 -> "Invalid email or password."
@@ -76,8 +60,6 @@ class AuthRepositoryImpl @Inject constructor(
             404 -> "Account not found."
             422 -> {
                 val raw = e.message.orEmpty()
-                // Some 422 cases are "already registered"; others are password
-                // strength / weak-password rejections. Distinguish on message.
                 when {
                     raw.contains("already", true) ||
                         raw.contains("registered", true) ->
@@ -124,21 +106,13 @@ class AuthRepositoryImpl @Inject constructor(
             role = user.role.name.lowercase(),
             groupId = user.groupId
         )
-        // Pull streak + last-devo-date back from the server so a fresh
-        // install doesn't reset the user's progress to 0. The server is
-        // the authoritative copy when local has nothing yet.
         prefs.reconcileStreakFromServer(
             serverStreak = user.streak,
             serverLastDevoIso = user.lastDevoAt?.toString()
         )
         secureTokenStore.saveRefreshToken(supabase.auth.currentSessionOrNull()?.refreshToken)
-        // Tag every future crash report with this user's id so we can
-        // correlate dashboard entries back to a specific account.
         CrashReporter.setUserId(user.id)
         CrashReporter.setKey("role", user.role.name.lowercase())
-        // Drain any prayers queued offline by THIS user from a prior
-        // session — without this trigger the queue sits forever, since
-        // NetworkMonitor only reacts to offline→online flips.
         enqueueOfflineDrain()
         Result.Success(user)
     } catch (e: Exception) {
@@ -158,15 +132,6 @@ class AuthRepositoryImpl @Inject constructor(
             }
             val uid = supabase.auth.currentUserOrNull()?.id
             if (uid != null) {
-                // Phase P.5 (claim flow) safety: a leader may have pre-
-                // registered this person as a proxy with this same email.
-                // The proxy row holds the email under the UNIQUE constraint,
-                // so a plain INSERT would collide.
-                //
-                // RLS hides other users' rows from the just-signed-up user,
-                // so a normal SELECT returns nothing. Use the SECURITY DEFINER
-                // RPC find_proxy_by_email that bypasses RLS for this check
-                // — only returns minimal data (id + name + is_compassion).
                 val proxyCheckJson: kotlinx.serialization.json.JsonElement =
                     runCatching {
                         supabase
@@ -186,16 +151,10 @@ class AuthRepositoryImpl @Inject constructor(
                     ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull }
                     ?: false
                 if (!proxyFound) {
-                    // No proxy collision — safe to insert the public.users
-                    // row normally. (If somehow an existing real-account row
-                    // exists with this email, the INSERT will 23505/409 and
-                    // the catch block surfaces the friendly error below.)
                     supabase.from("users").insert(
                         UserDto(id = uid, email = email, name = name, role = "member")
                     )
                 }
-                // For proxy-collision case we skip the INSERT — ClaimRecord
-                // will populate the public.users row when the user claims.
                 prefs.saveSession(uid, name, email, "member", null)
                 secureTokenStore.saveRefreshToken(
                     supabase.auth.currentSessionOrNull()?.refreshToken
@@ -212,10 +171,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun signInWithGoogle(): Result<Unit> = try {
-        // Triggers the Chrome Custom Tab. The SDK's Android platform helper
-        // uses Application context + FLAG_ACTIVITY_NEW_TASK, so this is safe
-        // to call from a coroutine without an Activity reference.
-        // Session is set later via MainActivity.handleDeeplinks(intent).
         supabase.auth.signInWith(Google) {
             scopes.add("email")
             scopes.add("profile")
@@ -229,12 +184,9 @@ class AuthRepositoryImpl @Inject constructor(
         supabase.auth.signOut()
         prefs.clearAll()
         secureTokenStore.clear()
-        // Drop the identity so any subsequent crash isn't attributed to
-        // the now-signed-out user.
         CrashReporter.setUserId(null)
         Result.Success(Unit)
     } catch (e: Exception) {
-        // Even if the remote sign-out fails, clear local state so the user is out.
         prefs.clearAll()
         secureTokenStore.clear()
         CrashReporter.setUserId(null)
@@ -256,7 +208,7 @@ class AuthRepositoryImpl @Inject constructor(
                 email = email ?: "",
                 name = name ?: "",
                 avatarUrl = null,
-                role = parseRole(role),
+                role = parseRoleString(role),
                 groupId = groupId,
                 streak = 0,
                 lastDevoAt = null,
@@ -266,12 +218,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteAccount(): Result<Unit> {
-        // The Edge Function performs the privileged delete (public.users +
-        // auth.users) with service role. If it fails (network down, server
-        // error, deploy missing), DO NOT proceed to clear local state —
-        // otherwise the user thinks their data is gone but it's still on
-        // the server. That's a privacy bug + Play Store compliance
-        // violation. Surface the failure so they can retry.
         return try {
             supabase.functions.invoke("delete-account")
             supabase.auth.signOut()
@@ -301,7 +247,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun completeProfile(
         role: UserRole,
-        groupId: String,
+        groupId: String?,
         isCompassion: Boolean,
         compassionNumber: String?,
         emergencyContact: String?,
@@ -310,10 +256,6 @@ class AuthRepositoryImpl @Inject constructor(
     ): Result<Unit> = try {
         val uid = supabase.auth.currentUserOrNull()?.id
             ?: return Result.Error("Your session expired. Please sign in again.")
-        // Single update so role/group/compassion/birthdate/sex land atomically.
-        // Compassion number is set only when isCompassion=true; nulled
-        // otherwise so a member who toggles off doesn't keep a stale ID.
-        // birthdate + sex are nullable for non-Compassion users.
         supabase.from("users").update(
             {
                 set("role", role.name.lowercase())
@@ -323,7 +265,6 @@ class AuthRepositoryImpl @Inject constructor(
                     if (isCompassion) compassionNumber else null)
                 set("emergency_contact",
                     emergencyContact?.trim()?.takeIf { it.isNotEmpty() })
-                // birthdate stored as ISO yyyy-MM-dd to match the DB DATE column.
                 set("birthdate", birthdate?.toString())
                 set("sex", sex?.takeIf { it == "M" || it == "F" })
             }
@@ -338,32 +279,24 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun syncProfileFromServer(): Result<Unit> = try {
         val uid = supabase.auth.currentUserOrNull()?.id
-            ?: return Result.Success(Unit) // signed out — nothing to sync
+            ?: return Result.Success(Unit)
         val dto = supabase.from("users")
             .select { filter { eq("id", uid) } }
             .decodeSingleOrNull<UserDto>()
-            ?: return Result.Success(Unit) // row missing; leave cached state alone
+            ?: return Result.Success(Unit)
         prefs.saveSession(
             userId = dto.id,
             name = dto.name,
-            // Real signed-in users always have a non-null email; the field
-            // is only nullable to support proxy-only members who can't sign
-            // in. Fall back to empty for type-safety.
             email = dto.email.orEmpty(),
             role = dto.role,
             groupId = dto.groupId
         )
-        // Same streak reconciliation as signIn — covers the cold-start
-        // session-restore path where the user never explicitly signs in
-        // but DataStore was wiped (uninstall + reinstall + auto-restore
-        // via stored refresh token).
         prefs.reconcileStreakFromServer(
             serverStreak = dto.streak,
             serverLastDevoIso = dto.lastDevoAt
         )
         Result.Success(Unit)
     } catch (_: Exception) {
-        // Best-effort background sync. Stale DataStore is acceptable.
         Result.Success(Unit)
     }
 
@@ -396,21 +329,16 @@ class AuthRepositoryImpl @Inject constructor(
             set("bio", bio)
             set("messenger_url", messengerUrl)
             set("messenger_public", messengerPublic)
-            // Same null-on-toggle-off discipline as completeProfile so a member
-            // who turns off Compassion doesn't leave a stale ID behind.
             set("is_compassion", isCompassion)
             set("compassion_number",
                 if (isCompassion) compassionNumber else null)
             set("emergency_contact",
                 emergencyContact?.trim()?.takeIf { it.isNotEmpty() })
-            // birthdate + sex — accepted on every edit, including for
-            // non-Compassion users (backfill the existing population).
             set("birthdate", birthdate?.toString())
             set("sex", sex?.takeIf { it == "M" || it == "F" })
         }) {
             filter { eq("id", uid) }
         }
-        // Mirror name into DataStore so Settings/header reflect it immediately.
         runCatching {
             prefs.saveSession(
                 userId = uid,
@@ -426,8 +354,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun changePassword(newPassword: String): Result<Unit> = try {
-        // Supabase modifies the authenticated user in place. Server enforces
-        // password rules (length, complexity) and returns 422 if violated.
         supabase.auth.modifyUser { password = newPassword }
         Result.Success(Unit)
     } catch (e: Exception) {
@@ -436,15 +362,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun sendPasswordResetEmail(email: String): Result<Unit> = try {
-        // Supabase Auth ships its own email path for password reset —
-        // separate from our Resend setup (which is sandbox-locked for
-        // bulk + welcome emails). This works for any email address.
-        // The user receives a one-time link that opens Supabase's
-        // hosted "Set a new password" page in their browser.
-        //
-        // Account-enumeration defense: if [email] isn't registered, the
-        // SDK still returns success so an attacker can't probe which
-        // emails have accounts. The UI always shows "Check your email."
         supabase.auth.resetPasswordForEmail(email.trim())
         Result.Success(Unit)
     } catch (e: Exception) {
@@ -453,10 +370,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun isEmailPasswordUser(): Boolean = try {
-        // Each Supabase identity carries a provider ("email" for password
-        // sign-up, "google" for OAuth). Users can have BOTH if they linked
-        // accounts, so any "email" identity counts as eligible for Change
-        // Password — even a Google-first user who later set a password.
         val info = supabase.auth.currentUserOrNull()
         info?.identities?.any { it.provider == "email" } ?: false
     } catch (_: Exception) { false }
@@ -465,12 +378,8 @@ class AuthRepositoryImpl @Inject constructor(
         val info = supabase.auth.currentUserOrNull()
             ?: return Result.Error("Not signed in.")
         val myEmail = info.email?.trim()?.lowercase()
-            ?: return Result.Success(null)   // OAuth users without email — skip
+            ?: return Result.Success(null)
 
-        // RLS hides other users' rows from the just-signed-up user, so we
-        // can't SELECT proxy rows directly. Use the SECURITY DEFINER RPC
-        // (added by feature-leader-proxy-claim.sql) which bypasses RLS for
-        // a controlled email lookup and returns minimal data only.
         val resultJson = supabase
             .pluginManager
             .getPlugin(io.github.jan.supabase.postgrest.Postgrest)
@@ -501,8 +410,6 @@ class AuthRepositoryImpl @Inject constructor(
                     as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull.orEmpty()
                 val isCompassion = (resultJson["is_compassion"]
                     as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull == true
-                // Synthesize a minimal User from the RPC's reply — that's
-                // all the ClaimRecord screen needs to render the prompt.
                 Result.Success(
                     User(
                         id = proxyId,
@@ -525,10 +432,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun claimProxyRecord(proxyUserId: String): Result<Unit> = try {
-        // Calls the public.claim_proxy_record SQL function — see
-        // supabase/feature-leader-proxy-claim.sql for the contract. The
-        // function self-validates the email match server-side; we just
-        // post the proxy_id.
         supabase
             .pluginManager
             .getPlugin(io.github.jan.supabase.postgrest.Postgrest)
@@ -539,8 +442,6 @@ class AuthRepositoryImpl @Inject constructor(
                         kotlinx.serialization.json.JsonPrimitive(proxyUserId))
                 }
             )
-        // Re-sync the now-merged profile into DataStore so role/group/etc
-        // reflect the inherited proxy data.
         runCatching { syncProfileFromServer() }
         Result.Success(Unit)
     } catch (e: Exception) {
@@ -548,17 +449,6 @@ class AuthRepositoryImpl @Inject constructor(
         Result.Error(friendlyError(e), e)
     }
 
-    /**
-     * Walks the cause chain looking for an IOException. Returns true if
-     * the failure is rooted in a network problem (no connectivity, DNS
-     * fail, connection reset, timeout) rather than an auth problem
-     * (HTTP 401/403, malformed token, etc.).
-     *
-     * Critical for offline UX: when a cold start happens with no
-     * connectivity, supabase-kt's refresh call throws an IOException.
-     * Without this distinction we'd wipe a perfectly valid session +
-     * boot the user to Login on every offline cold start.
-     */
     private fun isNetworkError(e: Throwable): Boolean {
         var cur: Throwable? = e
         while (cur != null) {
@@ -569,21 +459,6 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun refreshSessionIfNeeded(): Boolean {
-        // OFFLINE-FIRST GUARD: if we're not online, don't even attempt the
-        // refresh. Refreshing requires a network round-trip; offline → it
-        // would throw IOException (or some Ktor variant) → the old code
-        // treated that as "token revoked" and wiped DataStore + the
-        // stored refresh token, kicking the user to Login on every
-        // offline cold start.
-        //
-        // Skipping the network call avoids the failure entirely:
-        //   - Path A (in-memory session): keep it; return true.
-        //   - Path B (cold start, stored token): leave the stored token
-        //     intact; return false so MainActivity knows there's no
-        //     ACTIVE session yet — but DataStore.userId is still set, so
-        //     routing lands on MAIN_GRAPH and Room serves cached content.
-        //   - The networkMonitor observer in MainActivity will retry
-        //     refreshSessionIfNeeded() when connectivity flips back on.
         if (!networkMonitor.isOnline) {
             CrashReporter.log(
                 "refreshSessionIfNeeded: offline; skipping refresh, keeping local state"
@@ -591,8 +466,6 @@ class AuthRepositoryImpl @Inject constructor(
             return supabase.auth.currentSessionOrNull() != null
         }
 
-        // Path A — we already have a session in memory. Refresh the access
-        // token to extend its validity.
         if (supabase.auth.currentSessionOrNull() != null) {
             return try {
                 supabase.auth.refreshCurrentSession()
@@ -601,10 +474,6 @@ class AuthRepositoryImpl @Inject constructor(
                 )
                 true
             } catch (e: Exception) {
-                // OFFLINE-FIRST: a network error here doesn't mean the
-                // session is invalid — the user is just offline. Keep
-                // the in-memory session alive so they can use cached
-                // content. The next online refresh attempt will succeed.
                 if (isNetworkError(e)) {
                     CrashReporter.log(
                         "refreshCurrentSession: network error; keeping session"
@@ -619,20 +488,8 @@ class AuthRepositoryImpl @Inject constructor(
                 false
             }
         }
-        // Path B — cold start (process was killed / app restarted). No
-        // in-memory session, but if we have a stored refresh token from a
-        // previous sign-in, swap it for a fresh session. WITHOUT this,
-        // DataStore says we're signed in but the Supabase client stays
-        // anonymous — every RLS-gated read silently returns []. This is
-        // the events-empty-after-reinstall bug.
         val storedRefresh = secureTokenStore.refreshToken()
         if (storedRefresh.isNullOrBlank()) {
-            // No stored token. If DataStore still claims the user is signed
-            // in (auto-backup restored DataStore but the keystore self-heal
-            // cleared SecureTokenStore), force a clean re-login. Otherwise
-            // the app sits on Main graph as 'anonymous' and every RLS query
-            // silently returns []. The user thinks the app is broken when
-            // really they just need to sign in again.
             val prefsUid = prefs.userId.first()
             if (!prefsUid.isNullOrBlank()) {
                 CrashReporter.log(
@@ -646,14 +503,6 @@ class AuthRepositoryImpl @Inject constructor(
             return false
         }
         return try {
-            // refreshSession() returns the new UserSession but does NOT
-            // always auto-set it as the current session in supabase-kt 2.5.4
-            // — depends on the install. Explicitly importSession() so the
-            // Auth state machine flips to Authenticated and subsequent
-            // RLS-gated queries actually carry the JWT. Without this the
-            // call appears to succeed but every fetch silently goes out
-            // anonymous and returns [] — the "log out + sign in to fix"
-            // symptom users were hitting.
             val newSession = supabase.auth.refreshSession(storedRefresh)
             supabase.auth.importSession(newSession)
             secureTokenStore.saveRefreshToken(
@@ -665,9 +514,6 @@ class AuthRepositoryImpl @Inject constructor(
                     "currentSession=$nowAuth"
             )
             if (!nowAuth) {
-                // importSession silently failed somehow. Clear and force
-                // re-login rather than let the user sit on Main with no
-                // working session.
                 CrashReporter.log(
                     "refreshSessionIfNeeded: import did not stick — forcing re-login"
                 )
@@ -676,31 +522,15 @@ class AuthRepositoryImpl @Inject constructor(
                 CrashReporter.setUserId(null)
                 return false
             }
-            // Session restored from a stored refresh token — drain any
-            // queued offline work now that we have a valid JWT.
             enqueueOfflineDrain()
             true
         } catch (e: Exception) {
-            // OFFLINE-FIRST: network error on cold-start refresh = user
-            // is just offline. Keep stored token + DataStore intact so
-            // they land on MAIN_GRAPH with cached Room content. The
-            // next online refresh attempt will succeed (the Supabase
-            // client auto-refreshes on the first online API call too).
-            // Without this, swiping the app from recents while offline
-            // boots the user to Login — exactly the bug the offline-
-            // first audit asked us to fix.
             if (isNetworkError(e)) {
                 CrashReporter.log(
                     "refreshSession: network error on cold start; keeping stored token"
                 )
-                return false  // false = "session not currently active"
-                              // BUT we kept the token + prefs, so
-                              // MainActivity will route to MAIN_GRAPH
-                              // because DataStore.userId is still set.
+                return false
             }
-            // Refresh token actually expired or revoked — force a clean
-            // re-login so the user sees a working Login screen instead
-            // of an empty Home/Events.
             CrashReporter.log("refreshSession with stored token failed (auth)")
             CrashReporter.recordNonFatal(e)
             secureTokenStore.clear()

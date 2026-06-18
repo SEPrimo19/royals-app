@@ -24,7 +24,6 @@ data class AdminComplianceUiState(
     val includeAttendance: Boolean = true,
     val includeMeditation: Boolean = true,
     val isLoading: Boolean = false,
-    /** Most recent successful report build — drives the on-screen preview. */
     val report: ComplianceReportData? = null,
     val error: String? = null
 )
@@ -58,7 +57,7 @@ class AdminComplianceReportViewModel @Inject constructor(
         when (event) {
             is AdminComplianceEvent.AudienceChanged -> {
                 _uiState.update { it.copy(audience = event.audience) }
-                refresh()  // recompute on filter change so the preview is live
+                refresh()
             }
             is AdminComplianceEvent.PeriodChanged -> {
                 _uiState.update { it.copy(period = event.period) }
@@ -76,8 +75,6 @@ class AdminComplianceReportViewModel @Inject constructor(
         val s = _uiState.value
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            // Lambda captures `s.period` — re-running refresh() with a
-            // different period rebuilds with the new predicate.
             val result = buildComplianceReportUseCase(
                 audience = s.audience,
                 periodIncludes = { dt -> s.period.includes(dt) }
@@ -98,9 +95,6 @@ class AdminComplianceReportViewModel @Inject constructor(
     }
 }
 
-// `ExportPeriod.includes` mirrors the helper in MyProgressScreen — duplicated
-// here so the admin screen doesn't depend on a UI screen file. Small enough
-// that the duplication is cheaper than extracting to a util.
 private fun ExportPeriod.includes(dt: java.time.LocalDateTime): Boolean = when (this) {
     is ExportPeriod.AllTime -> true
     is ExportPeriod.Month ->

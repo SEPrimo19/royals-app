@@ -1,23 +1,6 @@
--- =============================================================================
--- GRACE — Bible Games v6: bulk content drop.
---
--- Brings each category to ~100 questions for proper variety. Adds ~85 new
--- questions per category (Old Testament, New Testament, Character) across
--- all three difficulties, each with a 1-sentence explanation and verse ref.
---
--- All content NKJV-aligned. ON CONFLICT DO NOTHING + the explicit pre-check
--- below make this safe to re-run; later leader edits via the Curate screen
--- are never overwritten.
---
--- After this runs, the v5 backfill is unnecessary for these rows since they
--- already ship with explanations.
--- =============================================================================
 
 INSERT INTO bible_questions (category, difficulty, question, options, correct_index, source_ref, explanation) VALUES
 
--- =============================================================================
--- OLD TESTAMENT — EASY (~30)
--- =============================================================================
 ('old_testament','easy','Who was the first man God created?',
  '["Cain","Noah","Adam","Enoch"]'::jsonb,2,'Genesis 2:7',
  'The Lord formed Adam from the dust of the ground and breathed life into his nostrils (Genesis 2:7).'),
@@ -109,9 +92,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Stars","Animals","Nothing — He rested","Man"]'::jsonb,2,'Genesis 2:2',
  'On the seventh day God ended His work, and He rested — blessing and sanctifying the day (Genesis 2:2-3).'),
 
--- =============================================================================
--- OLD TESTAMENT — MEDIUM (~28)
--- =============================================================================
 ('old_testament','medium','How old was Methuselah when he died?',
  '["777","800","930","969"]'::jsonb,3,'Genesis 5:27',
  'Methuselah lived 969 years — the longest life recorded in Scripture — and then he died (Genesis 5:27).'),
@@ -197,9 +177,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Job''s friend Eliphaz","Job''s wife","Bildad","Job himself"]'::jsonb,1,'Job 2:9',
  'Job''s wife told him to “curse God and die,” but Job answered that we receive good and adversity from God (Job 2:9-10).'),
 
--- =============================================================================
--- OLD TESTAMENT — HARD (~27)
--- =============================================================================
 ('old_testament','hard','How many years did Solomon reign over Israel?',
  '["20","30","40","50"]'::jsonb,2,'1 Kings 11:42',
  'Solomon reigned in Jerusalem over all Israel forty years (1 Kings 11:42).'),
@@ -282,9 +259,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Jehoiada","Jehosheba","Huldah","Zechariah"]'::jsonb,1,'2 Kings 11:2-3',
  'Jehosheba, sister of King Ahaziah, hid Joash in the temple for six years while Athaliah reigned (2 Kings 11:2-3).'),
 
--- =============================================================================
--- NEW TESTAMENT — EASY (~30)
--- =============================================================================
 ('new_testament','easy','What angel announced Jesus'' birth to Mary?',
  '["Michael","Gabriel","Raphael","Uriel"]'::jsonb,1,'Luke 1:26-27',
  'The angel Gabriel was sent from God to Nazareth to announce Jesus'' birth to the virgin Mary (Luke 1:26-27).'),
@@ -376,9 +350,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Andrew","Peter","James","John"]'::jsonb,1,'Matthew 16:18',
  'Jesus said, “You are Peter, and on this rock I will build My church” — Peter''s name means “rock” (Matthew 16:18).'),
 
--- =============================================================================
--- NEW TESTAMENT — MEDIUM (~27)
--- =============================================================================
 ('new_testament','medium','What did Peter answer when Jesus asked "Who do you say I am?"',
  '["A great prophet","Elijah returned","The Christ, the Son of the living God","John the Baptist"]'::jsonb,2,'Matthew 16:16',
  'Peter answered, “You are the Christ, the Son of the living God” — a revelation from the Father (Matthew 16:16-17).'),
@@ -461,9 +432,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["John","Peter","Andrew","James"]'::jsonb,1,'John 1:42',
  'Jesus said, “You shall be called Cephas” (which is translated, A Stone / Peter) (John 1:42).'),
 
--- =============================================================================
--- NEW TESTAMENT — HARD (~28)
--- =============================================================================
 ('new_testament','hard','In how many languages was the inscription on Jesus'' cross?',
  '["One","Two","Three","Four"]'::jsonb,2,'John 19:20',
  'The inscription was written in Hebrew, Greek, and Latin so all could read it (John 19:20).'),
@@ -549,9 +517,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Anointed the tomb","Wept","Cast lots","Read from Isaiah"]'::jsonb,1,'John 11:35',
  'Seeing Mary and the mourners weeping, Jesus groaned in His spirit and wept (John 11:33-35).'),
 
--- =============================================================================
--- CHARACTER — EASY (~30)
--- =============================================================================
 ('character','easy','Who was the wife of Adam?',
  '["Sarah","Eve","Rebekah","Rachel"]'::jsonb,1,'Genesis 3:20',
  'Adam called his wife''s name Eve, because she was the mother of all living (Genesis 3:20).'),
@@ -643,9 +608,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Deborah","Rahab","Ruth","Jael"]'::jsonb,1,'Joshua 2:1-6',
  'Rahab the harlot welcomed the spies and hid them under stalks of flax on her roof (Joshua 2:1-6).'),
 
--- =============================================================================
--- CHARACTER — MEDIUM (~28)
--- =============================================================================
 ('character','medium','Who walked with God and was taken without dying?',
  '["Noah","Enoch","Elijah","Methuselah"]'::jsonb,1,'Genesis 5:24',
  'Enoch walked with God; and he was not, for God took him (Genesis 5:24).'),
@@ -731,9 +693,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Apollos","Aquila","Demetrius","Sosthenes"]'::jsonb,0,'Acts 18:24',
  'Apollos was an eloquent man, mighty in the Scriptures, instructed in the way of the Lord (Acts 18:24-25).'),
 
--- =============================================================================
--- CHARACTER — HARD (~28)
--- =============================================================================
 ('character','hard','Who was the father of Lot?',
  '["Nahor","Haran","Terah","Bethuel"]'::jsonb,1,'Genesis 11:27',
  'Haran was Lot''s father, and Haran was the brother of Abram (Genesis 11:27).'),
@@ -821,8 +780,3 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
 
 ON CONFLICT DO NOTHING;
 
--- Sanity check (run manually):
---   SELECT category, count(*) FROM bible_questions WHERE is_active GROUP BY 1 ORDER BY 1;
---   SELECT category, difficulty, count(*) FROM bible_questions WHERE is_active GROUP BY 1,2 ORDER BY 1,2;
--- Expected after this migration: ~100 per category (give or take a few from
--- earlier seeds), spread roughly 33/33/34 across easy/medium/hard.

@@ -42,20 +42,15 @@ class WeeklyMeditationRepositoryImpl @Inject constructor(
     private val networkMonitor: NetworkMonitor
 ) : WeeklyMeditationRepository {
 
-    // Long-lived scope for fire-and-forget background refreshes. Singleton
-    // so it survives ViewModel lifecycle without leaking — the JVM owns it.
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // ---- public API --------------------------------------------------------
 
     override fun observeCurrentMeditation(): Flow<WeeklyMeditation?> = flow {
         val today = LocalDate.now().toString()
-        // Emit Room first so the UI gets something instantly even offline.
         meditationDao.observeCurrent(today)
             .map { it?.toDomain() }
             .distinctUntilChanged()
             .onStart {
-                // Kick a background refresh on first collection (offline-safe).
                 refreshScope.launch { refreshMeditationsFromServer() }
             }
             .collect { emit(it) }
@@ -88,8 +83,6 @@ class WeeklyMeditationRepositoryImpl @Inject constructor(
     override suspend fun findMySubmission(meditationId: String):
         MeditationSubmission? {
         val uid = prefs.userId.first().orEmpty().ifBlank { return null }
-        // Refresh first when online so a freshly-submitted reflection on
-        // another device shows up immediately when the user revisits.
         if (networkMonitor.isOnline) {
             runCatching { refreshMySubmissionsFromServer(uid) }
         }
@@ -110,9 +103,6 @@ class WeeklyMeditationRepositoryImpl @Inject constructor(
             )
         }
         return try {
-            // Upsert returns the canonical row. The UNIQUE (user_id,
-            // meditation_id) constraint + `onConflict = "user_id,meditation_id"`
-            // means an existing submission is updated in place, not duplicated.
             val saved = supabase.from("user_meditation_submissions")
                 .upsert(
                     value = MeditationSubmissionInsertDto(
@@ -136,8 +126,6 @@ class WeeklyMeditationRepositoryImpl @Inject constructor(
     override suspend fun getSubmissionsForUser(
         userId: String
     ): Result<List<MeditationSubmission>> = try {
-        // RLS filters at the DB layer — we just ask. Empty list is a valid
-        // "you don't have access" response (no error to surface).
         val rows = supabase.from("user_meditation_submissions")
             .select { filter { eq("user_id", userId) } }
             .decodeList<MeditationSubmissionDto>()
@@ -149,7 +137,6 @@ class WeeklyMeditationRepositoryImpl @Inject constructor(
         Result.Error("Couldn't load reflections.", e)
     }
 
-    // ---- internals ---------------------------------------------------------
 
     private suspend fun refreshMeditationsFromServer() {
         if (!networkMonitor.isOnline) return

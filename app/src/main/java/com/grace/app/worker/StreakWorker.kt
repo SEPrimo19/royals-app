@@ -12,10 +12,6 @@ import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
 
-/**
- * Pushes the locally-computed devotional streak to Supabase users.streak.
- * Enqueued after markComplete succeeds; retries on transient failure.
- */
 @HiltWorker
 class StreakWorker @AssistedInject constructor(
     @Assisted appContext: Context,
@@ -28,13 +24,10 @@ class StreakWorker @AssistedInject constructor(
         val uid = supabase.auth.currentUserOrNull()?.id
             ?: prefs.userId.first()
         if (uid.isNullOrBlank()) {
-            Result.success() // no session — nothing to sync
+            Result.success()
         } else {
             val streak = prefs.devoStreak.first()
             val lastDevoDate = prefs.lastDevoDate.first()
-            // Push BOTH streak and last_devo_at so the server has enough
-            // info to (a) restore on reinstall + (b) detect a broken
-            // streak (last completion > yesterday) on the next sign-in.
             supabase.from("users").update({
                 set("streak", streak)
                 if (!lastDevoDate.isNullOrBlank()) {

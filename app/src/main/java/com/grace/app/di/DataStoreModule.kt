@@ -11,7 +11,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-// Single DataStore instance for the whole app, named "grace_prefs".
 private val Context.gracePrefsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "grace_prefs"
 )

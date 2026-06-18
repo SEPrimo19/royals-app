@@ -81,9 +81,6 @@ fun PostPrayerOnBehalfScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        // Honesty notice — the leader needs to know community will see
-        // the "via {leader}" tag, so they don't post things the member
-        // wanted kept private.
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(

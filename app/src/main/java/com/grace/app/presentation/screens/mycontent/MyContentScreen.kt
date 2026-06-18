@@ -65,7 +65,6 @@ fun MyContentScreen(
     var pendingEditPost by remember { mutableStateOf<Post?>(null) }
     var pendingDeletePostId by remember { mutableStateOf<String?>(null) }
 
-    // Auto-dismiss toasts after 2.5s.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -245,8 +244,6 @@ private fun TabPill(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-// Date format used by the reflection card. Kept module-level so the formatter
-// is built once, not on every recomposition.
 private val reflectionDateFmt: DateTimeFormatter =
     DateTimeFormatter.ofPattern("MMM d, yyyy")
 
@@ -280,7 +277,6 @@ private fun MyReflectionCard(item: MyReflectionItem) {
                         color = GraceCreamDim, fontSize = 11.sp
                     )
                 } else {
-                    // Defensive — meditation was deleted server-side.
                     Text(
                         "Past meditation",
                         color = GraceCreamDim, fontSize = 11.sp
@@ -330,9 +326,6 @@ private fun MyReflectionCard(item: MyReflectionItem) {
     }
 }
 
-// Mirror of WeeklyMeditationTab.ThemeChip's color map. Duplicated here so
-// neither file has to know about the other's internals; small enough that
-// duplication < extraction.
 @Composable
 private fun themeColor(theme: MeditationTheme) = when (theme) {
     MeditationTheme.JESUS -> GraceGold

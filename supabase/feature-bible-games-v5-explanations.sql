@@ -1,15 +1,3 @@
--- =============================================================================
--- GRACE — Bible Games v5: backfill `explanation` on every seeded question.
---
--- The original seed (feature-bible-games.sql) + v2 expansion never wrote the
--- `explanation` column, so the reveal card after each answer was empty. This
--- migration sets a 1-sentence "why the correct answer is right" for every
--- existing seeded question. Match is by exact question text.
---
--- Safe to re-run: each UPDATE only fires when explanation is currently NULL
--- or blank, so later leader edits via the Curate Questions screen are not
--- overwritten.
--- =============================================================================
 
 DO $$
 DECLARE
@@ -119,9 +107,3 @@ BEGIN
   END LOOP;
 END $$;
 
--- Sanity check (run manually):
---   SELECT count(*) FILTER (WHERE explanation IS NULL OR btrim(explanation)='') AS missing,
---          count(*) AS total
---     FROM bible_questions;
--- Should show: missing = 0 (or only counts any leader-added rows that haven't
--- been given an explanation yet).

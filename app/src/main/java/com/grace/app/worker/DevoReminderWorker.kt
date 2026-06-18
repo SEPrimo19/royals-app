@@ -16,10 +16,6 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 
-/**
- * Daily local reminder for the user's chosen devotional time. Mirrors
- * PrayerReminderWorker — same pattern, different channel + destination.
- */
 @HiltWorker
 class DevoReminderWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,

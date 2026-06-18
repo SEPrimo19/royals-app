@@ -22,7 +22,7 @@ import javax.inject.Inject
 data class AdminUserDetailUiState(
     val user: User? = null,
     val isLoading: Boolean = true,
-    val pendingRole: UserRole? = null,           // role chosen in dialog
+    val pendingRole: UserRole? = null,
     val pendingIsSensitive: Boolean = false,
     val isCommitting: Boolean = false,
     val error: String? = null
@@ -39,11 +39,6 @@ sealed interface AdminUserDetailEffect {
     data class ShowSuccess(val message: String) : AdminUserDetailEffect
 }
 
-/**
- * Admin → tap a user → this screen. Reuses GetAllUsersUseCase + finds the
- * one row we want. Cheap on a youth-ministry-sized list. A dedicated
- * GetUserByIdUseCase would also work but is overkill for this volume.
- */
 @HiltViewModel
 class AdminUserDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -88,8 +83,6 @@ class AdminUserDetailViewModel @Inject constructor(
         when (event) {
             is AdminUserDetailEvent.StartRoleChange -> {
                 val current = _uiState.value.user?.role
-                // Same sensitivity rule as AdminScreen — promoting to or
-                // demoting from pastor/admin requires explicit confirmation.
                 val sensitive = event.newRole == UserRole.PASTOR ||
                     event.newRole == UserRole.ADMIN ||
                     current == UserRole.PASTOR ||
@@ -128,7 +121,6 @@ class AdminUserDetailViewModel @Inject constructor(
                             "${user.name} is now ${newRole.label}."
                         )
                     )
-                    // Reload so the displayed role matches what the server has.
                     load()
                 }
                 is Result.Error -> {

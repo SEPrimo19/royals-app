@@ -25,17 +25,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Sort/filter mode for the prayer list. NEWEST is the default — keeps
- * recently-asked prayers at the top. Independent of the category filter
- * — they layer together.
- */
 enum class PrayerSort { NEWEST, OLDEST, ANSWERED, MOST_PRAYED }
 
 data class PrayerUiState(
     val prayers: List<Prayer> = emptyList(),
-    // Unfiltered active total — kept separate so the header count stays honest
-    // even when the user picks a category filter.
     val totalActiveCount: Int = 0,
     val isLoading: Boolean = true,
     val activeFilter: PrayerCategory? = null,
@@ -46,8 +39,6 @@ data class PrayerUiState(
     val isNewPrayerAnonymous: Boolean = true,
     val isSubmittingPrayer: Boolean = false,
     val prayCountUpdates: Map<String, Int> = emptyMap(),
-    // Prayer IDs the current user has already prayed for. Drives the
-    // "already prayed" visual on PrayerCard. Optimistically appended on tap.
     val myIntercessions: Set<String> = emptySet(),
     val currentUserId: String? = null,
     val error: String? = null
@@ -88,7 +79,6 @@ class PrayerViewModel @Inject constructor(
     val effect: SharedFlow<PrayerEffect> = _effect.asSharedFlow()
 
     private var prayersJob: Job? = null
-    // One Realtime subscription per visible prayer; tracked for cleanup.
     private val prayCountJobs = mutableMapOf<String, Job>()
 
     init {
@@ -99,13 +89,6 @@ class PrayerViewModel @Inject constructor(
         loadMyIntercessions()
     }
 
-    /**
-     * Force a fresh remote fetch + reconcile. The bottom-bar saveState/
-     * restoreState keeps this VM alive across tab switches, so init's fetch
-     * only fires once. Without this call, a prayer deleted in Supabase would
-     * linger as a ghost card until the user kills and reopens the app. The
-     * Prayer screen calls this from a LaunchedEffect each time it enters.
-     */
     fun refresh() {
         val s = _uiState.value
         observePrayers(s.activeFilter, s.sort)
@@ -120,7 +103,6 @@ class PrayerViewModel @Inject constructor(
         }
     }
 
-    /** Lets the screen display an error message that came via the effect bus. */
     fun surfaceError(message: String) {
         _uiState.update { it.copy(error = message) }
     }
@@ -128,8 +110,6 @@ class PrayerViewModel @Inject constructor(
     private fun observePrayers(category: PrayerCategory?, sort: PrayerSort) {
         prayersJob?.cancel()
         prayersJob = viewModelScope.launch {
-            // Always observe the unfiltered stream so we have an honest total
-            // for the header, then filter + sort for the visible list locally.
             getPrayersUseCase(null).collect { result ->
                 when (result) {
                     is Result.Success -> {
@@ -156,11 +136,6 @@ class PrayerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Client-side sort/filter applied AFTER the category filter. Keeps the
-     * repo query single and lets us swap modes instantly without a fresh
-     * fetch. ANSWERED also filters status, the others just resort.
-     */
     private fun applySort(prayers: List<Prayer>, sort: PrayerSort): List<Prayer> {
         return when (sort) {
             PrayerSort.NEWEST -> prayers.sortedByDescending { it.createdAt }
@@ -168,9 +143,6 @@ class PrayerViewModel @Inject constructor(
             PrayerSort.ANSWERED -> prayers
                 .filter { it.status == PrayerStatus.ANSWERED }
                 .sortedByDescending { it.createdAt }
-            // Use the realtime override when available so the sort matches
-            // what the user sees on screen (the card's count uses max() of
-            // realtime vs stored).
             PrayerSort.MOST_PRAYED -> prayers.sortedByDescending { p ->
                 maxOf(
                     p.prayCount,
@@ -181,10 +153,8 @@ class PrayerViewModel @Inject constructor(
     }
 
     private fun syncPrayCountSubscriptions(visibleIds: List<String>) {
-        // Drop subscriptions for prayers no longer on screen.
         val gone = prayCountJobs.keys - visibleIds.toSet()
         gone.forEach { id -> prayCountJobs.remove(id)?.cancel() }
-        // Add subscriptions for newly visible prayers.
         visibleIds.filter { it !in prayCountJobs }.forEach { id ->
             prayCountJobs[id] = viewModelScope.launch {
                 prayerRepository.subscribeToPrayCount(id).collect { count ->
@@ -222,7 +192,6 @@ class PrayerViewModel @Inject constructor(
     }
 
     private fun submitPrayer() {
-        // Atomic claim — see FeedViewModel.submitPost for the same race fix.
         var claimed = false
         _uiState.update { current ->
             if (current.isSubmittingPrayer || current.newPrayerText.isBlank()) current
@@ -259,13 +228,10 @@ class PrayerViewModel @Inject constructor(
     }
 
     private fun intercede(prayerId: String) {
-        // Optimistic: mark as "prayed for" in the UI immediately. Idempotent
-        // on the server side, so retap is safe; rollback on failure below.
         _uiState.update { it.copy(myIntercessions = it.myIntercessions + prayerId) }
         viewModelScope.launch {
             when (val r = intercedeForPrayerUseCase(prayerId)) {
                 is Result.Error -> {
-                    // Roll back the optimistic add — the tap didn't take.
                     _uiState.update {
                         it.copy(myIntercessions = it.myIntercessions - prayerId)
                     }
@@ -286,7 +252,6 @@ class PrayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        // Explicitly tear down every Realtime subscription.
         prayCountJobs.values.forEach { it.cancel() }
         prayCountJobs.clear()
         prayersJob?.cancel()

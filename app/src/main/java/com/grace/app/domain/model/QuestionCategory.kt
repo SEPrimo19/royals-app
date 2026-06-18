@@ -1,6 +1,5 @@
 package com.grace.app.domain.model
 
-/** Trivia category — drives filter chips in the Practice tab. */
 enum class QuestionCategory {
     OLD_TESTAMENT,
     NEW_TESTAMENT,

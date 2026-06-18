@@ -69,13 +69,7 @@ fun WeeklyMeditationTab(
     viewModel: WeeklyMeditationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // Inline toast still used for ERROR cases only — the success path now
-    // promotes to a proper modal dialog (audit item #2).
     var toast by remember { mutableStateOf<String?>(null) }
-    // Captures the time the dialog opened, so the modal can show "Submitted
-    // at 4:32 PM" matching when the user actually tapped Submit. We don't
-    // wait for the server round-trip to fill this — Saved fires AFTER
-    // server confirms.
     var submittedAt by remember { mutableStateOf<LocalDateTime?>(null) }
 
     if (toast != null) {
@@ -108,8 +102,6 @@ fun WeeklyMeditationTab(
         }
     }
 
-    // Confirmation modal — replaces the old inline toast for the success
-    // path. More affirming for the user, matches the gravity of the action.
     if (submittedAt != null) {
         ReflectionSubmittedDialog(
             submittedAt = submittedAt!!,
@@ -187,7 +179,6 @@ private fun MeditationContent(
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
-        // ---- Header band ---------------------------------------------------
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -219,7 +210,6 @@ private fun MeditationContent(
             color = GraceCreamDim, fontSize = 11.sp
         )
 
-        // ---- Scripture card -----------------------------------------------
         Spacer(Modifier.height(18.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -255,7 +245,6 @@ private fun MeditationContent(
             }
         }
 
-        // ---- Reflection prompt ---------------------------------------------
         Spacer(Modifier.height(18.dp))
         Text(
             "REFLECT",
@@ -272,7 +261,6 @@ private fun MeditationContent(
             lineHeight = 22.sp
         )
 
-        // ---- Further reading ------------------------------------------------
         if (!meditation.furtherReadingUrl.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
             val label = meditation.furtherReadingLabel
@@ -289,9 +277,6 @@ private fun MeditationContent(
                     )
                     .clickable {
                         runCatching {
-                            // ACTION_VIEW handles http/https links; no need for
-                            // a Chrome Custom Tab dependency here — the user's
-                            // default browser is the right choice.
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW,
                                     Uri.parse(meditation.furtherReadingUrl))
@@ -301,8 +286,6 @@ private fun MeditationContent(
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             )
             Spacer(Modifier.height(4.dp))
-            // Audit-item #2 helper copy — tells the youth user that the chip
-            // is tappable and what they'll get out of it.
             Text(
                 "Click the link for more knowledge.",
                 color = GraceCreamDim,
@@ -311,7 +294,6 @@ private fun MeditationContent(
             )
         }
 
-        // ---- Privacy badge (CRITICAL — meditation is leader-visible) -------
         Spacer(Modifier.height(22.dp))
         Row(
             modifier = Modifier
@@ -340,7 +322,6 @@ private fun MeditationContent(
             }
         }
 
-        // ---- Reflection text field ----------------------------------------
         Spacer(Modifier.height(14.dp))
         Text(
             "YOUR REFLECTION",
@@ -377,7 +358,6 @@ private fun MeditationContent(
             )
         )
 
-        // ---- Saved indicator + Submit button ------------------------------
         state.mySubmission?.let { sub ->
             Spacer(Modifier.height(8.dp))
             Text(

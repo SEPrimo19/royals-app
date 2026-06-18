@@ -1,29 +1,13 @@
--- =============================================================================
--- GRACE — Feature: Bible Games v1
---
--- Two play modes in v1:
---   - "trivia"  — MCQ Daily Challenge (5 questions/day) + Practice
---   - "fitb"    — Fill-in-the-Blank against curated Bible passages
---
--- Scoring (locked):
---   easy = 10, medium = 20, hard = 30 (wrong = 0)
---   Daily streak bonus +5/day current streak, capped at +25.
---
--- Leaderboard: cell-group weekly only, Top 5, Monday reset.
--- See `bible-games-v1-design` memory doc for the locked design decisions.
--- Safe to re-run.
--- =============================================================================
 
--- ---- TRIVIA QUESTIONS ------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bible_questions (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   category      TEXT NOT NULL CHECK (category IN ('old_testament','new_testament','character')),
   difficulty    TEXT NOT NULL CHECK (difficulty IN ('easy','medium','hard')),
   question      TEXT NOT NULL,
-  options       JSONB NOT NULL,  -- array of 4 strings
+  options       JSONB NOT NULL,
   correct_index INTEGER NOT NULL CHECK (correct_index BETWEEN 0 AND 3),
   explanation   TEXT,
-  source_ref    TEXT,            -- e.g. "Genesis 1:1"
+  source_ref    TEXT,
   language      TEXT NOT NULL DEFAULT 'nkjv',
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -32,15 +16,12 @@ CREATE TABLE IF NOT EXISTS bible_questions (
 CREATE INDEX IF NOT EXISTS idx_bible_questions_active
   ON bible_questions (is_active, difficulty);
 
--- ---- FILL-IN-THE-BLANK PASSAGES --------------------------------------------
--- Each passage has ONE pre-curated blank to keep v1 simple. v2 can add
--- multi-blank passages or auto-blanking.
 CREATE TABLE IF NOT EXISTS bible_passages (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  reference     TEXT NOT NULL,   -- "John 3:16"
-  text          TEXT NOT NULL,   -- full verse text, with the blank word AS-IS
-  blank_word    TEXT NOT NULL,   -- the word to remove + ask the user for
-  distractors   JSONB NOT NULL,  -- array of 3 wrong-answer strings
+  reference     TEXT NOT NULL,
+  text          TEXT NOT NULL,
+  blank_word    TEXT NOT NULL,
+  distractors   JSONB NOT NULL,
   language      TEXT NOT NULL DEFAULT 'nkjv',
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -48,8 +29,6 @@ CREATE TABLE IF NOT EXISTS bible_passages (
 
 CREATE INDEX IF NOT EXISTS idx_bible_passages_active ON bible_passages (is_active);
 
--- ---- GAME ATTEMPTS ---------------------------------------------------------
--- One row per question/passage answered. Used for scoring + leaderboard.
 CREATE TABLE IF NOT EXISTS game_attempts (
   id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -58,8 +37,6 @@ CREATE TABLE IF NOT EXISTS game_attempts (
   passage_id     UUID REFERENCES bible_passages(id) ON DELETE SET NULL,
   correct        BOOLEAN NOT NULL,
   points_earned  INTEGER NOT NULL DEFAULT 0,
-  -- Marks this attempt as part of the once-per-day Daily Challenge run
-  -- (vs unlimited Practice). Only daily attempts feed the leaderboard.
   is_daily       BOOLEAN NOT NULL DEFAULT FALSE,
   played_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -69,9 +46,6 @@ CREATE INDEX IF NOT EXISTS idx_game_attempts_user
 CREATE INDEX IF NOT EXISTS idx_game_attempts_leaderboard
   ON game_attempts (played_at DESC, is_daily) WHERE is_daily = TRUE;
 
--- ---- PER-USER STATS --------------------------------------------------------
--- Source of truth for streak + total points. Updated server-side when the
--- client posts a daily-challenge completion via [upsert_game_stats] below.
 CREATE TABLE IF NOT EXISTS game_user_stats (
   user_id                   UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   current_streak            INTEGER NOT NULL DEFAULT 0,
@@ -81,10 +55,6 @@ CREATE TABLE IF NOT EXISTS game_user_stats (
   last_daily_challenge_at   TIMESTAMPTZ
 );
 
--- ---- WEEKLY GROUP LEADERBOARD VIEW -----------------------------------------
--- "This week" = since the most recent Monday 00:00 in the server's TZ.
--- date_trunc('week', NOW()) returns Monday 00:00 in Postgres by default.
--- Joins through users.group_id so the row carries the group context.
 CREATE OR REPLACE VIEW weekly_group_leaderboard AS
 SELECT
   a.user_id,
@@ -98,14 +68,11 @@ WHERE a.is_daily = TRUE
   AND a.played_at >= date_trunc('week', NOW())
 GROUP BY a.user_id, u.name, u.group_id;
 
--- ---- RLS -------------------------------------------------------------------
 ALTER TABLE bible_questions       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bible_passages        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_attempts         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_user_stats       ENABLE ROW LEVEL SECURITY;
 
--- Content (questions + passages): anyone signed-in reads; only leaders
--- write. Curation screen lives behind that role gate.
 DROP POLICY IF EXISTS "bq_select" ON bible_questions;
 DROP POLICY IF EXISTS "bq_write"  ON bible_questions;
 CREATE POLICY "bq_select" ON bible_questions
@@ -130,8 +97,6 @@ CREATE POLICY "bp_write" ON bible_passages
     )
   );
 
--- Attempts: a user can read+write their own; leaders can also read their
--- mentees' attempts (powers the MemberDetail engagement view in v2).
 DROP POLICY IF EXISTS "ga_select_self_or_leader" ON game_attempts;
 DROP POLICY IF EXISTS "ga_insert_self"           ON game_attempts;
 CREATE POLICY "ga_select_self_or_leader" ON game_attempts
@@ -146,7 +111,6 @@ CREATE POLICY "ga_select_self_or_leader" ON game_attempts
 CREATE POLICY "ga_insert_self" ON game_attempts
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Stats: own-row CRUD; leaders read any.
 DROP POLICY IF EXISTS "gus_select_self_or_leader" ON game_user_stats;
 DROP POLICY IF EXISTS "gus_write_self"            ON game_user_stats;
 CREATE POLICY "gus_select_self_or_leader" ON game_user_stats
@@ -161,11 +125,7 @@ CREATE POLICY "gus_select_self_or_leader" ON game_user_stats
 CREATE POLICY "gus_write_self" ON game_user_stats
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Views inherit base-table RLS in Postgres (game_attempts policy applies
--- when SELECTing through weekly_group_leaderboard). So a member only sees
--- their own row + leaders see everyone — same as the underlying table.
 
--- ---- SEED: trivia (20 questions across difficulties/categories) -----------
 INSERT INTO bible_questions (category, difficulty, question, options, correct_index, source_ref) VALUES
 ('old_testament','easy','Who built an ark to survive the great flood?',
  '["Noah","Moses","Abraham","David"]'::jsonb,0,'Genesis 6'),
@@ -211,7 +171,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
  '["Joseph","Zacharias","Simeon","Eli"]'::jsonb,1,'Luke 1:5-13')
 ON CONFLICT DO NOTHING;
 
--- ---- SEED: Fill-in-the-Blank passages (8 verses, NKJV) --------------------
 INSERT INTO bible_passages (reference, text, blank_word, distractors) VALUES
 ('John 3:16',
  'For God so loved the world that He gave His only begotten Son, that whoever believes in Him should not perish but have everlasting life.',

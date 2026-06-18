@@ -54,9 +54,6 @@ class BulkEmailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(
         BulkEmailUiState(
-            // EventsScreen can pre-fill the form when sending an event blast
-            // by passing ?subject= and ?message= as nav args. Optional —
-            // bulk-email entry from Admin screen sets neither.
             subject = savedStateHandle.get<String>("subject").orEmpty(),
             message = savedStateHandle.get<String>("message").orEmpty()
         )

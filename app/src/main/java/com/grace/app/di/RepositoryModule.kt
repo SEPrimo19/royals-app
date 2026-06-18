@@ -26,10 +26,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-/**
- * Repository interface → implementation bindings. Each binding is added as its
- * RepositoryImpl is written (Devotional/Prayer/Feed/Leader land in Prompts 4-6).
- */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
@@ -77,4 +73,34 @@ abstract class RepositoryModule {
     abstract fun bindWeeklyMeditationRepository(
         impl: WeeklyMeditationRepositoryImpl
     ): WeeklyMeditationRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserNoteRepository(
+        impl: com.grace.app.data.repository.UserNoteRepositoryImpl
+    ): com.grace.app.domain.repository.UserNoteRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDiscipleshipRepository(
+        impl: com.grace.app.data.repository.DiscipleshipRepositoryImpl
+    ): com.grace.app.domain.repository.DiscipleshipRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppVersionRepository(
+        impl: com.grace.app.data.repository.AppVersionRepositoryImpl
+    ): com.grace.app.domain.repository.AppVersionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBibleRepository(
+        impl: com.grace.app.data.repository.BibleRepositoryImpl
+    ): com.grace.app.domain.repository.BibleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBibleStudyRepository(
+        impl: com.grace.app.data.repository.BibleStudyRepositoryImpl
+    ): com.grace.app.domain.repository.BibleStudyRepository
 }

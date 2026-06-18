@@ -141,7 +141,6 @@ private fun RoundBody(
 ) {
     val verse = state.currentVerse ?: return
 
-    // Reference chip
     Text(
         "📖 ${verse.reference}",
         color = GraceGold, fontSize = 11.sp,
@@ -152,9 +151,6 @@ private fun RoundBody(
     )
     Spacer(Modifier.height(14.dp))
 
-    // SLOTS — the assembled verse in placement order. Renders one word
-    // chip per filled slot + a placeholder underscore card per remaining
-    // slot, so the user sees their progress.
     Text(
         "ASSEMBLE THE VERSE",
         color = GraceCreamDim, fontSize = 10.sp,
@@ -165,8 +161,6 @@ private fun RoundBody(
 
     Spacer(Modifier.height(18.dp))
 
-    // CHIP POOL — render remaining words for tap-to-place. We don't show
-    // the pool once the verse is complete.
     if (!state.verseComplete) {
         Text(
             "TAP A WORD TO ADD IT",
@@ -181,7 +175,6 @@ private fun RoundBody(
         )
     }
 
-    // Bottom CTA once the verse is complete.
     if (state.verseComplete) {
         Spacer(Modifier.height(16.dp))
         CompletionBanner(state = state)
@@ -211,7 +204,6 @@ private fun SlotsCard(
         colors = CardDefaults.cardColors(containerColor = GraceCardBg),
         shape = RoundedCornerShape(14.dp)
     ) {
-        // FlowRow wraps onto multiple lines when the verse has many words.
         FlowRow(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -301,7 +293,6 @@ private fun ChipPool(
 
 @Composable
 private fun PoolChip(text: String, isFlashing: Boolean, onTap: () -> Unit) {
-    // Background flashes rose on a wrong tap, then animates back to neutral.
     val targetTint by animateFloatAsState(
         targetValue = if (isFlashing) 1f else 0f,
         animationSpec = tween(durationMillis = 250),

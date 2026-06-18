@@ -5,11 +5,6 @@ import com.grace.app.domain.repository.GamesRepository
 import com.grace.app.domain.util.Result
 import javax.inject.Inject
 
-/**
- * Loads the candidate pool of pairs for a Memory Cards board. The
- * ViewModel picks 6 from this pool to build a 12-card 3×4 grid.
- * Re-fetches fresh shuffled randomness on every "Play Again".
- */
 class GetMemoryCardPairsUseCase @Inject constructor(
     private val gamesRepository: GamesRepository
 ) {

@@ -1,40 +1,9 @@
--- =============================================================================
--- GRACE — Bible Games v15: "Timeline Sorting" mode (v2, Practice-only)
---
--- Tap-to-place chronological reconstruction. Each puzzle = 5 random events
--- the player taps in order from earliest → latest. 3 puzzles per round.
---
--- Scoring:
---   +40 pts per correctly sorted puzzle
---   +20 perfect-no-undo bonus per puzzle (zero wrong taps)
---   → up to 60/puzzle · 180/round
---
--- Practice-only for v1. Feeds the monthly global leaderboard via
--- game_attempts (mode = 'timeline_sort').
---
--- Unlike Who Am I? / Memory Cards / Verse Scramble, Timeline doesn't add
--- a content FK column on game_attempts: each puzzle is a dynamically
--- chosen SET of events, not a single curated row, so there's nothing
--- single-id to reference. game_attempts rows for timeline_sort just leave
--- all content FK columns null — fine because leaderboard / monthly sum
--- aggregate by user, not by content.
---
--- Per the [[who-am-i-shipped]] checklist, we still MUST widen the mode
--- CHECK so the inserts aren't silently rejected.
---
--- Safe to re-run.
--- =============================================================================
 
--- ---- TABLE: bible_events -------------------------------------------------
 CREATE TABLE IF NOT EXISTS bible_events (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title               TEXT NOT NULL,
   description         TEXT,
-  -- Canonical sort key. Lower number = earlier in Bible history. Spaced
-  -- by 100 so future events can slot in between without renumbering.
   chronological_order INTEGER NOT NULL,
-  -- Approximate date label shown in the reveal screen (e.g. "~1500 BC").
-  -- Optional — Creation, Fall, etc. don't have meaningful dates.
   approx_year_text    TEXT,
   source_ref          TEXT,
   is_active           BOOLEAN NOT NULL DEFAULT TRUE,
@@ -45,7 +14,6 @@ CREATE TABLE IF NOT EXISTS bible_events (
 CREATE INDEX IF NOT EXISTS idx_bible_events_active
   ON bible_events (is_active, chronological_order) WHERE is_active = TRUE;
 
--- ---- RLS ------------------------------------------------------------------
 ALTER TABLE bible_events ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "bible_events_select" ON bible_events;
@@ -86,7 +54,6 @@ CREATE POLICY "bible_events_delete" ON bible_events
     )
   );
 
--- ---- game_attempts: widen mode CHECK only (no FK column for this mode) --
 ALTER TABLE game_attempts
   DROP CONSTRAINT IF EXISTS game_attempts_mode_check;
 
@@ -96,7 +63,6 @@ ALTER TABLE game_attempts
     'trivia','fitb','who_am_i','memory_match','verse_scramble','timeline_sort'
   ));
 
--- ---- SEED: ~33 events spanning Creation → early Church -------------------
 INSERT INTO bible_events
   (title, description, chronological_order, approx_year_text, source_ref)
 VALUES
@@ -168,6 +134,3 @@ VALUES
    3600, '~AD 95',        'Revelation 1')
 ON CONFLICT DO NOTHING;
 
--- Sanity check (run manually):
---   SELECT count(*) FROM bible_events WHERE is_active;
--- Expected: 33 rows.

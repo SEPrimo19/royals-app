@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grace.app.domain.model.User
 import com.grace.app.domain.model.UserRole
+import com.grace.app.presentation.theme.GraceBlue
 import com.grace.app.presentation.theme.GraceCardBg
 import com.grace.app.presentation.theme.GraceCream
 import com.grace.app.presentation.theme.GraceCreamDim
@@ -50,12 +51,6 @@ import com.grace.app.presentation.theme.GraceMuted
 import com.grace.app.presentation.theme.GracePurple
 import com.grace.app.presentation.theme.GraceRose
 
-/**
- * Admin → tap a user → this screen. Read-mostly: shows name, email,
- * Compassion status, Compassion number, emergency contact, group + role.
- * The only mutating action is changing the role (sensitive changes
- * require confirmation, matching the existing AdminScreen contract).
- */
 @Composable
 fun AdminUserDetailScreen(
     onBack: () -> Unit,
@@ -114,7 +109,6 @@ fun AdminUserDetailScreen(
         }
         val user = state.user ?: return@Column
 
-        // Avatar + name + email header
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -141,7 +135,6 @@ fun AdminUserDetailScreen(
 
         Spacer(Modifier.height(20.dp))
         DetailCard {
-            // Role row — tappable to change. Dropdown emerges in-place.
             var menuOpen by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -235,7 +228,6 @@ fun AdminUserDetailScreen(
         Spacer(Modifier.height(32.dp))
     }
 
-    // Sensitive-change confirmation, mirroring AdminScreen's pattern.
     state.pendingRole?.let { role ->
         AlertDialog(
             onDismissRequest = {
@@ -303,12 +295,11 @@ private fun SmallLabel(text: String) {
     Spacer(Modifier.height(4.dp))
 }
 
-// Mirror of AdminScreen.roleColor() — kept local so the two screens can
-// evolve independently. Tiny enough that duplication < dependency.
 @androidx.compose.runtime.Composable
 private fun roleColor(role: UserRole): Color = when (role) {
     UserRole.MEMBER -> GraceMuted
     UserRole.CELL_LEADER -> GraceGreen
+    UserRole.COUNCIL -> GraceBlue
     UserRole.YOUTH_PRESIDENT -> GracePurple
     UserRole.PASTOR -> GraceGold
     UserRole.ADMIN -> GraceRose

@@ -21,8 +21,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** One reflection card on the leader-view side. Joins the member's submission
- *  with the meditation it responded to so the leader has full context. */
 data class MemberReflectionItem(
     val submission: MeditationSubmission,
     val meditation: WeeklyMeditation?
@@ -54,18 +52,12 @@ class MemberDetailViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, isLoadingReflections = true) }
-            // The mentee list query already includes everything we need
-            // for the header card — finding the matching record is cheaper
-            // than a per-member round trip.
             val mentee = (getMyMenteesUseCase() as? Result.Success)?.data
                 ?.firstOrNull { it.user.id == memberId }
             val checkIn = (getMemberCheckInUseCase(memberId) as? Result.Success)?.data
             _uiState.update {
                 it.copy(isLoading = false, mentee = mentee, latestCheckIn = checkIn)
             }
-            // Reflections load second + independently — empty list is the
-            // healthy "no access OR no submissions" response. RLS already
-            // gates this at the DB layer (own-cell-leader OR senior-leader).
             val subs = (getMeditationSubmissionsForUserUseCase(memberId)
                 as? Result.Success)?.data.orEmpty()
             val meds = runCatching {

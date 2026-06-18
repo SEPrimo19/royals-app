@@ -9,7 +9,6 @@ data class BiblePassage(
     val distractors: List<String>,
     val isActive: Boolean = true
 ) {
-    /** All 4 options for the player, shuffled with a per-call seed. */
     fun optionsShuffled(seed: Long = System.currentTimeMillis()): List<String> {
         val all = (distractors + blankWord).distinct()
         return all.shuffled(kotlin.random.Random(seed))

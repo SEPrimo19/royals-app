@@ -8,6 +8,7 @@ import com.grace.app.data.datastore.UserPreferencesRepo
 import com.grace.app.data.local.dao.OfflineSyncDao
 import com.grace.app.data.local.dao.PrayerDao
 import com.grace.app.data.local.entity.OfflineSyncEntity
+import com.grace.app.data.remote.supabase.dto.ClientDevoProgressDto
 import com.grace.app.data.remote.supabase.dto.PrayerInsertDto
 import com.grace.app.data.remote.supabase.dto.PrayerIntercessionDto
 import com.grace.app.data.remote.supabase.dto.UserDevoProgressDto
@@ -24,18 +25,6 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 
-/**
- * Drains the offline mutation queue when connectivity returns. Each item is
- * replayed directly against Supabase (not via the repositories) so we don't
- * re-trigger their optimistic Room writes / streak logic a second time.
- *
- * Per-item outcome is tri-state:
- *  - SUCCESS: server accepted; remove from queue and tidy any local optimistic row
- *  - SKIP:    leave in queue without bumping retry (e.g. a different user is now signed in)
- *  - FAIL:    bump retry; park as permanent failure after [MAX_RETRIES]
- *
- * Partial failures never fail the whole worker.
- */
 @HiltWorker
 class OfflineSyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
@@ -57,9 +46,6 @@ class OfflineSyncWorker @AssistedInject constructor(
         for (item in pending) {
             val attempt = runCatching { processItem(item) }
             val outcome = attempt.getOrElse {
-                // Surface the underlying exception — without this, every
-                // failure looked identical and we couldn't tell if it was
-                // RLS, network, or decode that was blocking the drain.
                 CrashReporter.log(
                     "OfflineSyncWorker item ${item.action}/${item.id} failed: ${it.message}"
                 )
@@ -69,9 +55,6 @@ class OfflineSyncWorker @AssistedInject constructor(
             when (outcome) {
                 Outcome.SUCCESS -> offlineSyncDao.deleteById(item.id)
                 Outcome.SKIP -> {
-                    // Intentionally don't touch retry_count — the item will
-                    // be re-tried next drain (e.g. after the original poster
-                    // signs back in).
                 }
                 Outcome.FAIL -> {
                     val next = item.retryCount + 1
@@ -95,20 +78,11 @@ class OfflineSyncWorker @AssistedInject constructor(
                 ?: prefs.userId.first()
             when {
                 currentUid == null -> Outcome.FAIL
-                // Defense-in-depth: if a different user is now signed in,
-                // never attribute this prayer to them. Leave it in the queue
-                // for whenever the original poster signs back in. Legacy
-                // entries (p.userId == null, from before this field existed)
-                // fall through to the current user.
                 p.userId != null && p.userId != currentUid -> Outcome.SKIP
                 else -> {
                     supabase.from("prayers").insert(
                         PrayerInsertDto(currentUid, p.content, p.isAnonymous, p.category)
                     )
-                    // Drop the optimistic Room row now that the real one
-                    // exists on the server. The next getPrayers() refetch
-                    // pulls the real row with its server-generated id; without
-                    // this delete the user briefly sees two cards.
                     if (p.localId != null) prayerDao.deleteById(p.localId)
                     Outcome.SUCCESS
                 }
@@ -124,8 +98,6 @@ class OfflineSyncWorker @AssistedInject constructor(
                     supabase.from("prayer_intercessions")
                         .insert(PrayerIntercessionDto(p.prayerId, uid))
                 } catch (e: Exception) {
-                    // Duplicate composite-PK = the user already prayed from
-                    // another session. No-op success — drop the queue item.
                     if (e.message?.contains("duplicate key", ignoreCase = true) != true) {
                         throw e
                     }
@@ -135,9 +107,14 @@ class OfflineSyncWorker @AssistedInject constructor(
         }
         SyncActions.MARK_DEVO_COMPLETE -> {
             val p = json.decodeFromString<MarkDevoCompletePayload>(item.payload)
-            // Client-generated daily devotionals (id = "daily-YYYY-MM-DD")
-            // don't exist in Supabase — their progress is local-only.
             if (p.devoId.startsWith("daily-")) {
+                supabase.from("user_client_devo_progress").upsert(
+                    ClientDevoProgressDto(
+                        userId = p.userId,
+                        clientDevoKey = p.devoId,
+                        journalEntry = p.encryptedJournal
+                    )
+                )
                 Outcome.SUCCESS
             } else {
                 supabase.from("user_devo_progress").upsert(
@@ -146,7 +123,6 @@ class OfflineSyncWorker @AssistedInject constructor(
                 Outcome.SUCCESS
             }
         }
-        // Unknown action: drop it rather than loop forever.
         else -> Outcome.SUCCESS
     }
 

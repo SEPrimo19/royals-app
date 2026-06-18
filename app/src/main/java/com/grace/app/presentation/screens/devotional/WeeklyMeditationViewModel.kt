@@ -25,16 +25,10 @@ data class WeeklyMeditationUiState(
     val meditation: WeeklyMeditation? = null,
     val mySubmission: MeditationSubmission? = null,
     val reflectionText: String = "",
-    /**
-     * Distinguishes "haven't touched the editor" from "started typing then
-     * cleared." A fresh load sets this from `mySubmission?.reflectionText`
-     * so saved text shows; user typing flips this true.
-     */
     val isDirty: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null
 ) {
-    /** Submit enabled when there's actual non-whitespace content. */
     val canSubmit: Boolean
         get() = reflectionText.trim().isNotEmpty() && !isSaving
 }
@@ -68,9 +62,6 @@ class WeeklyMeditationViewModel @Inject constructor(
     private fun observeCurrent() {
         viewModelScope.launch {
             getCurrentWeekMeditationUseCase()
-                // Only re-fetch the submission when the meditation ID changes;
-                // intra-week content edits by admin shouldn't blow away the
-                // user's in-flight draft.
                 .distinctUntilChangedBy { it?.id }
                 .collect { meditation ->
                     if (meditation == null) {
@@ -90,10 +81,6 @@ class WeeklyMeditationViewModel @Inject constructor(
                         it.copy(
                             meditation = meditation,
                             mySubmission = mine,
-                            // Seed editor with the saved text on load. If user
-                            // had already edited (isDirty=true), keep their
-                            // draft — we don't want a background refresh to
-                            // stomp on what they're typing.
                             reflectionText = if (it.isDirty) it.reflectionText
                                 else mine?.reflectionText.orEmpty(),
                             isLoading = false
@@ -126,8 +113,6 @@ class WeeklyMeditationViewModel @Inject constructor(
             )) {
                 is Result.Success -> {
                     _uiState.update { it.copy(isSaving = false, isDirty = false) }
-                    // Reload the submission so the "Submitted on …" line
-                    // reflects the server's truth (id, timestamps).
                     val mine = runCatching {
                         findMyMeditationSubmissionUseCase(meditationId)
                     }.getOrNull()

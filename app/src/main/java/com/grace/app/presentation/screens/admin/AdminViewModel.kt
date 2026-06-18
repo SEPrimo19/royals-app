@@ -18,23 +18,48 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+enum class AdminFilter(val label: String) {
+    ALL("All"),
+    MEMBER("Members"),
+    CELL_LEADER("Cell Leaders"),
+    COUNCIL("Council"),
+    YOUTH_PRESIDENT("Youth President"),
+    PASTOR("Pastors"),
+    ADMIN("Admins"),
+    COMPASSION("Compassion")
+}
+
 data class AdminUiState(
     val users: List<User> = emptyList(),
     val query: String = "",
+    val filter: AdminFilter = AdminFilter.ALL,
+    val sortAsc: Boolean = true,
     val isLoading: Boolean = true,
     val pendingUpdate: PendingUpdate? = null,
     val error: String? = null
 ) {
-    /** Lower-cased search filter applied client-side — admin lists are small. */
     val visibleUsers: List<User>
-        get() = if (query.isBlank()) users
-        else users.filter {
-            it.name.contains(query, ignoreCase = true) ||
-                it.email.contains(query, ignoreCase = true)
+        get() {
+            val filtered = when (filter) {
+                AdminFilter.ALL -> users
+                AdminFilter.COMPASSION -> users.filter { it.isCompassion }
+                AdminFilter.MEMBER -> users.filter { it.role == UserRole.MEMBER }
+                AdminFilter.CELL_LEADER -> users.filter { it.role == UserRole.CELL_LEADER }
+                AdminFilter.COUNCIL -> users.filter { it.role == UserRole.COUNCIL }
+                AdminFilter.YOUTH_PRESIDENT -> users.filter { it.role == UserRole.YOUTH_PRESIDENT }
+                AdminFilter.PASTOR -> users.filter { it.role == UserRole.PASTOR }
+                AdminFilter.ADMIN -> users.filter { it.role == UserRole.ADMIN }
+            }
+            val searched = if (query.isBlank()) filtered
+            else filtered.filter {
+                it.name.contains(query, ignoreCase = true) ||
+                    it.email.contains(query, ignoreCase = true)
+            }
+            return if (sortAsc) searched.sortedBy { it.name.lowercase() }
+            else searched.sortedByDescending { it.name.lowercase() }
         }
 }
 
-/** A role change awaiting confirmation. Sensitive promotions require it. */
 data class PendingUpdate(
     val user: User,
     val newRole: UserRole,
@@ -43,6 +68,8 @@ data class PendingUpdate(
 
 sealed interface AdminEvent {
     data class QueryChanged(val query: String) : AdminEvent
+    data class FilterChanged(val filter: AdminFilter) : AdminEvent
+    data object ToggleSortDirection : AdminEvent
     data class StartRoleChange(val user: User, val newRole: UserRole) : AdminEvent
     data object ConfirmRoleChange : AdminEvent
     data object CancelRoleChange : AdminEvent
@@ -91,8 +118,13 @@ class AdminViewModel @Inject constructor(
             is AdminEvent.QueryChanged ->
                 _uiState.update { it.copy(query = event.query) }
 
+            is AdminEvent.FilterChanged ->
+                _uiState.update { it.copy(filter = event.filter) }
+
+            AdminEvent.ToggleSortDirection ->
+                _uiState.update { it.copy(sortAsc = !it.sortAsc) }
+
             is AdminEvent.StartRoleChange -> {
-                // Sensitive = promoting to pastor/admin OR demoting from them.
                 val sensitive = event.newRole == UserRole.PASTOR ||
                     event.newRole == UserRole.ADMIN ||
                     event.user.role == UserRole.PASTOR ||
@@ -133,11 +165,11 @@ class AdminViewModel @Inject constructor(
     }
 }
 
-/** Human-readable role labels used across the Admin UI. */
 val UserRole.label: String
     get() = when (this) {
         UserRole.MEMBER -> "Member"
         UserRole.CELL_LEADER -> "Cell Leader"
+        UserRole.COUNCIL -> "Council"
         UserRole.YOUTH_PRESIDENT -> "Youth President"
         UserRole.PASTOR -> "Pastor"
         UserRole.ADMIN -> "Admin"

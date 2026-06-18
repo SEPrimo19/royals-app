@@ -14,6 +14,7 @@ import com.grace.app.data.remote.supabase.dto.GameAttemptInsertDto
 import com.grace.app.data.remote.supabase.dto.GameUserStatsDto
 import com.grace.app.data.remote.supabase.dto.LeaderboardEntryDto
 import com.grace.app.data.remote.supabase.dto.MonthlyLeaderboardEntryDto
+import com.grace.app.data.remote.supabase.dto.TeamLeaderboardEntryDto
 import com.grace.app.data.remote.supabase.dto.mapper.toDomain
 import com.grace.app.data.util.NetworkMonitor
 import com.grace.app.domain.model.BibleCharacter
@@ -57,7 +58,6 @@ class GamesRepositoryImpl @Inject constructor(
     private suspend fun currentUid(): String? =
         supabase.auth.currentUserOrNull()?.id ?: prefs.userId.first()
 
-    // ---- QUESTIONS --------------------------------------------------------
 
     override suspend fun getDailyChallengeQuestions(
         difficulty: GameDifficulty
@@ -66,9 +66,6 @@ class GamesRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to play today's challenge.")
         }
         return try {
-            // Pool filtered to this difficulty; deterministic shuffle
-            // keyed by (date, difficulty) so all players see the same
-            // 10 questions for, e.g., Easy today.
             val pool = supabase.from("bible_questions")
                 .select {
                     filter {
@@ -136,9 +133,6 @@ class GamesRepositoryImpl @Inject constructor(
                 .select { filter { eq("is_active", true) } }
                 .decodeList<BibleEventDto>()
                 .map { it.toDomain() }
-            // Don't pre-shuffle here — the ViewModel needs the full pool
-            // to pick 5 events with NON-adjacent chronological_order (so
-            // puzzles don't degenerate into "guess which order looks right").
             val capped = all.take(count.coerceAtMost(BIBLE_EVENTS_MAX))
             Result.Success(capped)
         } catch (e: Exception) {
@@ -201,7 +195,6 @@ class GamesRepositoryImpl @Inject constructor(
         }
     }
 
-    // ---- WRITES -----------------------------------------------------------
 
     override suspend fun recordAttempt(
         mode: GameMode,
@@ -235,6 +228,13 @@ class GamesRepositoryImpl @Inject constructor(
                 )
             )
             bumpIncrementalPoints(uid, pointsEarned)
+            runCatching {
+                prefs.setLastBibleGamesPlayedDate(
+                    java.time.LocalDate
+                        .now(java.time.ZoneId.of("Asia/Manila"))
+                        .toString()
+                )
+            }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error("Couldn't save your answer.", e)
@@ -311,14 +311,6 @@ class GamesRepositoryImpl @Inject constructor(
         }
     }
 
-    /**
-     * Streak rule shared by every daily completion path:
-     *   - First-ever daily         → streak = 1
-     *   - Already completed today  → unchanged (whichever round you did
-     *     first today bumped the streak; later rounds today don't double-count)
-     *   - Most-recent daily was yesterday → streak + 1
-     *   - Older                    → streak resets to 1
-     */
     private fun computeStreak(existing: GameUserStatsDto?, today: LocalDate): Int {
         val mostRecentDaily = listOfNotNull(
             existing?.lastEasyAt,
@@ -336,7 +328,6 @@ class GamesRepositoryImpl @Inject constructor(
         }
     }
 
-    // ---- READS ------------------------------------------------------------
 
     override suspend fun getMyStats(): Result<GameStats> {
         val uid = currentUid()
@@ -348,12 +339,6 @@ class GamesRepositoryImpl @Inject constructor(
             val dto = supabase.from("game_user_stats")
                 .select { filter { eq("user_id", uid) } }
                 .decodeSingleOrNull<GameUserStatsDto>()
-            // The hub's big "points" stat now reports this month's sum, in
-            // sync with the monthly global leaderboard. We compute on the
-            // server (get_my_month_points RPC) so the month boundary uses
-            // the same date_trunc the leaderboard uses — no client TZ skew.
-            // game_user_stats.total_points stays as lifetime cumulative in
-            // the DB (handy for future "all-time best" badges).
             val monthPoints = runCatching {
                 supabase.pluginManager.getPlugin(Postgrest)
                     .rpc(function = "get_my_month_points")
@@ -379,11 +364,6 @@ class GamesRepositoryImpl @Inject constructor(
             return Result.Success(emptyList())
         }
         return try {
-            // SECURITY DEFINER RPC instead of selecting the view directly.
-            // game_attempts' RLS hides other users' rows from regular
-            // members, which would break the leaderboard; the RPC reveals
-            // ONLY the aggregated row-per-user (no individual attempt
-            // leakage). Server-side group/role check inside the function.
             val rows = supabase
                 .pluginManager
                 .getPlugin(Postgrest)
@@ -416,10 +396,6 @@ class GamesRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to see the global leaderboard.")
         }
         return try {
-            // Same SECURITY DEFINER pattern as weekly — the RPC aggregates
-            // over the entire game_attempts table (would be blocked by RLS
-            // for any single SELECT). The function authenticates internally
-            // so anonymous callers cannot invoke it.
             val rows = supabase
                 .pluginManager
                 .getPlugin(Postgrest)
@@ -440,15 +416,35 @@ class GamesRepositoryImpl @Inject constructor(
         @SerialName("p_limit") val pLimit: Int
     )
 
-    // ---- LIFELINES (v14) -------------------------------------------------
+    override suspend fun getTeamLeaderboard(
+        limit: Int
+    ): Result<List<LeaderboardEntry>> {
+        if (!networkMonitor.isOnline) {
+            return Result.Error("You're offline. Connect to see the team leaderboard.")
+        }
+        return try {
+            val myGroupId = prefs.groupId.first()
+            val rows = supabase
+                .pluginManager
+                .getPlugin(Postgrest)
+                .rpc(
+                    function = "get_team_leaderboard",
+                    parameters = MonthlyLeaderboardRpcParams(pLimit = limit)
+                )
+                .decodeList<TeamLeaderboardEntryDto>()
+                .map { it.toDomain(myGroupId = myGroupId) }
+            Result.Success(rows)
+        } catch (e: Exception) {
+            Result.Error("Couldn't load the team leaderboard.", e)
+        }
+    }
+
 
     override suspend fun getLifelines(): Result<LifelinesState> {
         if (!networkMonitor.isOnline) {
             return Result.Error("You're offline.")
         }
         return try {
-            // RPC returns a single-row table — decode as a list and take
-            // the first row. Server auto-refills on read if stale.
             val rows = supabase.pluginManager.getPlugin(Postgrest)
                 .rpc(function = "get_lifelines")
                 .decodeList<LifelinesDto>()
@@ -483,8 +479,6 @@ class GamesRepositoryImpl @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            // The RPC raises if the user has none left — message reaches
-            // here via the exception. Pass it along so the UI can show it.
             val msg = e.message ?: "Couldn't use that lifeline."
             Result.Error(
                 when {
@@ -502,7 +496,6 @@ class GamesRepositoryImpl @Inject constructor(
         @SerialName("kind") val kind: String
     )
 
-    // ---- CURATION (leader/admin only — RLS enforced) ---------------------
 
     override suspend fun listAllQuestions(): Result<List<BibleQuestion>> {
         if (!networkMonitor.isOnline) {
@@ -649,9 +642,7 @@ class GamesRepositoryImpl @Inject constructor(
         else -> "Couldn't save changes. Try again."
     }
 
-    // ---- helpers ----------------------------------------------------------
 
-    /** Patch total_points + last_played_at on every attempt. Idempotent. */
     private suspend fun bumpIncrementalPoints(uid: String, delta: Int) {
         runCatching {
             val existing = supabase.from("game_user_stats")
@@ -682,20 +673,10 @@ class GamesRepositoryImpl @Inject constructor(
 
     private companion object {
         const val DAILY_CHALLENGE_SIZE = 10
-        // Practice fetches the entire active pool now (~300 questions after
-        // the v6 bulk seed). The ViewModel handles in-session shuffling and
-        // wrap-around so a session goes through every question once before
-        // any repeat.
         const val PRACTICE_MAX = 500
-        // Same pattern for Who Am I? — fetch the entire pool (currently ~30)
-        // and let the ViewModel walk the shuffled list.
         const val WHO_AM_I_MAX = 200
-        // Memory Cards pool cap. We pull all active pairs (~30 in seed),
-        // and the ViewModel picks 6 random ones for each board.
         const val MEMORY_PAIRS_MAX = 200
-        // Verse Scramble pool cap — ViewModel picks 5 verses per round.
         const val VERSE_SCRAMBLES_MAX = 200
-        // Timeline Sorting events pool cap — ViewModel picks 5 per puzzle.
         const val BIBLE_EVENTS_MAX = 200
     }
 }

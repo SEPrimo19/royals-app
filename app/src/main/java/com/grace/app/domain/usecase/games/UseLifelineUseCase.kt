@@ -6,7 +6,6 @@ import com.grace.app.domain.repository.GamesRepository
 import com.grace.app.domain.util.Result
 import javax.inject.Inject
 
-/** Spends one lifeline of [kind] and returns the new balance. */
 class UseLifelineUseCase @Inject constructor(
     private val gamesRepository: GamesRepository
 ) {

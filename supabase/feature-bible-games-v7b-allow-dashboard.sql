@@ -1,15 +1,3 @@
--- =============================================================================
--- GRACE — Bible Games v7b: drop the redundant auth.uid() check inside the
--- monthly global RPC.
---
--- The original v7 raised "Authentication required" when auth.uid() was NULL.
--- That blocks the Supabase SQL Editor (which runs as the postgres role with
--- no auth context) but adds no security — `REVOKE ALL FROM PUBLIC` and
--- `GRANT EXECUTE TO authenticated` already prevent anonymous external
--- callers from invoking the RPC.
---
--- Safe to re-run.
--- =============================================================================
 
 CREATE OR REPLACE FUNCTION get_monthly_global_leaderboard(
   p_limit INTEGER DEFAULT 25

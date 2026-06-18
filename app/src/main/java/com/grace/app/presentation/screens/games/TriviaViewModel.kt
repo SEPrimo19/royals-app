@@ -25,10 +25,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Route arg encoding. Mode values: "daily-easy", "daily-medium",
- * "daily-hard", "practice". Practice ignores difficulty entirely.
- */
 private fun parseModeArg(raw: String?): Pair<Boolean, GameDifficulty?> = when (raw) {
     "daily-easy" -> true to GameDifficulty.EASY
     "daily-medium" -> true to GameDifficulty.MEDIUM
@@ -45,18 +41,12 @@ data class TriviaUiState(
     val selectedOption: Int? = null,
     val correctCount: Int = 0,
     val pointsEarned: Int = 0,
-    // --- Practice only ---
     val livesRemaining: Int = MAX_LIVES,
     val timerSeconds: Int = QUESTION_DURATION_S,
     val timedOut: Boolean = false,
-    /** Joshua Effect — frozen timer for current question. Resets on next(). */
     val timerFrozen: Boolean = false,
-    // --- End ---
-    /** Daniel Effect — indices the player has had eliminated from MCQ. */
     val eliminatedIndices: Set<Int> = emptySet(),
-    /** Lifeline balance, refreshed on round start + after each use. */
     val lifelines: LifelinesState = LifelinesState(),
-    /** Surfaced when a lifeline use fails (e.g. exhausted). */
     val lifelineError: String? = null,
     val isFinished: Boolean = false,
     val finishedReason: FinishReason? = null,
@@ -122,28 +112,21 @@ class TriviaViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 🛡️ Joshua Effect — freeze the active Practice timer for the
-     * current question. No-op in Daily (no timer). RPC decrements
-     * the server-side balance atomically.
-     */
     fun useJoshua() {
         val s = _uiState.value
-        if (s.isDaily) return                       // Daily has no timer
+        if (s.isDaily) return
         if (s.hasAnswered) return
-        if (s.timerFrozen) return                   // already used this question
+        if (s.timerFrozen) return
         if (s.lifelines.joshuaRemaining <= 0) {
             _uiState.update { it.copy(lifelineError = "No Joshua Effects left today.") }
             return
         }
-        // Optimistic: pause timer + show frozen state immediately.
         timerJob?.cancel()
         _uiState.update { it.copy(timerFrozen = true) }
         viewModelScope.launch {
             when (val r = useLifelineUseCase(LifelineKind.JOSHUA)) {
                 is Result.Success -> _uiState.update { it.copy(lifelines = r.data) }
                 is Result.Error -> _uiState.update {
-                    // Rollback the optimistic freeze; restart the timer.
                     it.copy(timerFrozen = false, lifelineError = r.message)
                 }.also { startTimer() }
                 Result.Loading -> Unit
@@ -151,20 +134,15 @@ class TriviaViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 🕯️ Daniel Effect — 50/50. Randomly eliminates 2 wrong MCQ options.
-     * Works in both Daily and Practice. RPC decrements balance.
-     */
     fun useDaniel() {
         val s = _uiState.value
         val q = s.currentQuestion ?: return
         if (s.hasAnswered) return
-        if (s.eliminatedIndices.isNotEmpty()) return    // already used this question
+        if (s.eliminatedIndices.isNotEmpty()) return
         if (s.lifelines.danielRemaining <= 0) {
             _uiState.update { it.copy(lifelineError = "No Daniel Effects left today.") }
             return
         }
-        // Pick 2 wrong indices to eliminate.
         val wrongs = q.options.indices.filter { it != q.correctIndex }
         val toEliminate = wrongs.shuffled().take(2).toSet()
         _uiState.update { it.copy(eliminatedIndices = toEliminate) }
@@ -172,7 +150,6 @@ class TriviaViewModel @Inject constructor(
             when (val r = useLifelineUseCase(LifelineKind.DANIEL)) {
                 is Result.Success -> _uiState.update { it.copy(lifelines = r.data) }
                 is Result.Error -> _uiState.update {
-                    // Rollback: clear eliminated.
                     it.copy(eliminatedIndices = emptySet(), lifelineError = r.message)
                 }
                 Result.Loading -> Unit
@@ -190,11 +167,6 @@ class TriviaViewModel @Inject constructor(
             val result = if (isDaily) {
                 getDailyChallengeUseCase(difficulty!!)
             } else {
-                // Fetch the entire active pool (capped at PRACTICE_MAX in
-                // the repo). The repo also shuffles, so we get a fresh
-                // randomized ordering each Practice session. Wrap-around
-                // logic in [next] guarantees zero repeats until the whole
-                // pool has been seen once.
                 getPracticeQuestionsUseCase(count = 500)
             }
             when (result) {
@@ -223,10 +195,7 @@ class TriviaViewModel @Inject constructor(
         }
     }
 
-    // ---- Practice timer ---------------------------------------------------
 
-    /** 15-second countdown per question. Auto-reveals as wrong on hit zero.
-     *  Pauses while [TriviaUiState.timerFrozen] is true (Joshua Effect). */
     private fun startTimer() {
         timerJob?.cancel()
         _uiState.update {
@@ -237,7 +206,7 @@ class TriviaViewModel @Inject constructor(
                 delay(1000L)
                 val s = _uiState.value
                 if (s.hasAnswered) return@launch
-                if (s.timerFrozen) continue          // Joshua: don't tick down
+                if (s.timerFrozen) continue
                 _uiState.update { it.copy(timerSeconds = it.timerSeconds - 1) }
             }
             timeOutCurrent()
@@ -265,12 +234,11 @@ class TriviaViewModel @Inject constructor(
         }
     }
 
-    // ---- Events -----------------------------------------------------------
 
     fun selectOption(index: Int) {
         val state = _uiState.value
         if (state.hasAnswered) return
-        if (index in state.eliminatedIndices) return    // Daniel: dead option
+        if (index in state.eliminatedIndices) return
         val q = state.currentQuestion ?: return
         timerJob?.cancel()
         val correct = index == q.correctIndex
@@ -307,11 +275,6 @@ class TriviaViewModel @Inject constructor(
             finishRound(FinishReason.COMPLETED)
             return
         }
-        // Daily: walk straight through the deterministic list.
-        // Practice: walk through the shuffled list; on exhaustion, re-shuffle
-        // for an "unlimited, no repeats until pool exhausted" session feel.
-        // The re-shuffle moves the just-seen question to the back so the user
-        // never gets the same question twice in a row across the boundary.
         if (isDaily) {
             _uiState.update {
                 it.copy(
@@ -319,7 +282,6 @@ class TriviaViewModel @Inject constructor(
                     selectedOption = null,
                     timedOut = false,
                     timerSeconds = QUESTION_DURATION_S,
-                    // Lifeline effects reset per question.
                     timerFrozen = false,
                     eliminatedIndices = emptySet()
                 )
@@ -329,9 +291,6 @@ class TriviaViewModel @Inject constructor(
             if (nextIdx >= state.questions.size) {
                 val lastSeen = state.currentQuestion
                 val reshuffled = state.questions.shuffled().let { list ->
-                    // If by chance the first card of the new round is the
-                    // one we just saw, swap it with the last to keep the
-                    // "no immediate repeat" guarantee.
                     if (list.firstOrNull()?.id == lastSeen?.id && list.size > 1)
                         list.drop(1) + list.first()
                     else list

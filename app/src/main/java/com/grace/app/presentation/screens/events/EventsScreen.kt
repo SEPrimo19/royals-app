@@ -52,8 +52,6 @@ import java.time.format.DateTimeFormatter
 private val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a")
 
 @Composable
-// onShowRoster opens the Phase P.2 leader roster (mark proxy attendance for
-// no-app cell members). Gated on canCreateEvents — cell leaders + above.
 fun EventsScreen(
     onBack: () -> Unit,
     onShowQr: (String) -> Unit = {},
@@ -68,7 +66,6 @@ fun EventsScreen(
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
     var scanToast by remember { mutableStateOf<String?>(null) }
 
-    // Re-fetch on each entry — VM persists, so init runs only once.
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(Unit) {
         viewModel.effect.collect { fx ->
@@ -76,9 +73,6 @@ fun EventsScreen(
         }
     }
 
-    // Scanner launcher. Routes a successful scan to EventCheckInScreen
-    // via the same path the deep link uses; surfaces a friendly toast
-    // for cancellations / bad QRs without rendering as an error.
     val launchScanner = rememberQrScanner { result ->
         when (result) {
             is QrScanResult.Success -> {
@@ -126,8 +120,6 @@ fun EventsScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Scan entry point — visible to everyone. Members use it to
-                // check in; creators use it to verify their own QR works.
                 Text(
                     "📷 Scan",
                     color = GraceCream, fontSize = 12.sp,
@@ -139,7 +131,6 @@ fun EventsScreen(
                         .clickable { launchScanner() }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 )
-                // Leader-only Create button.
                 if (state.canCreateEvents) {
                     Text(
                         "+ Create",
@@ -167,8 +158,6 @@ fun EventsScreen(
             Text("⚠ ${state.error}", color = GraceRose)
         }
 
-        // Delete confirmation dialog rendered at the screen level so the
-        // dismiss state survives card recomposition.
         pendingDeleteId?.let { id ->
             AlertDialog(
                 onDismissRequest = { pendingDeleteId = null },
@@ -293,8 +282,6 @@ private fun EventCard(
                     )
                 }
                 if (!event.requiresAttendance) {
-                    // Pure announcement — no QR, no check-in. Badge gives
-                    // creators a visual reminder that no roster will exist.
                     Text(
                         "📣 Info only",
                         color = GraceCreamDim, fontSize = 10.sp,
@@ -306,7 +293,6 @@ private fun EventCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
-                // Edit/Delete overflow — creator or senior leaders only.
                 if (canManage) {
                     androidx.compose.foundation.layout.Box {
                         Text(
@@ -373,9 +359,6 @@ private fun EventCard(
                 }
             }
 
-            // Creator-only QR access. Per user spec, even senior leaders can't
-            // see another creator's QR — only the actual event creator.
-            // Suppressed entirely for info-only events (no attendance to take).
             if (isMyEvent && event.requiresAttendance) {
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -389,10 +372,6 @@ private fun EventCard(
                 )
             }
 
-            // Phase P.2 — leader roster button. Available to every cell
-            // leader + senior leader (not just the creator), since leaders
-            // need to mark proxy attendance for their cell members at any
-            // event the church holds. Hidden for info-only events.
             if (isLeader && event.requiresAttendance) {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -438,12 +417,6 @@ private fun RsvpPill(
     }
 }
 
-/**
- * Extracts the event id from a scanned `grace://event-checkin/{id}` payload.
- * Defensive: accepts mixed-case scheme and trailing slashes; rejects any
- * other URI shape so the user gets a clear "not a GRACE code" message
- * instead of being sent to a check-in screen for nothing.
- */
 private fun parseEventCheckInPayload(raw: String): String? {
     val uri = runCatching { android.net.Uri.parse(raw.trim()) }.getOrNull()
         ?: return null

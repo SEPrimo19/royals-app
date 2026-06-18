@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.grace.app.data.datastore.UserPreferencesRepo
 import com.grace.app.domain.model.LeaderboardEntry
 import com.grace.app.domain.usecase.games.GetMonthlyGlobalLeaderboardUseCase
+import com.grace.app.domain.usecase.games.GetTeamLeaderboardUseCase
 import com.grace.app.domain.usecase.games.GetWeeklyLeaderboardUseCase
 import com.grace.app.domain.util.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,38 +17,32 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Two boards, one screen. Period switches between:
- *   - WEEKLY_CELL  — caller's cell group, Daily Challenge only, resets Monday.
- *   - MONTHLY_GLOBAL — entire church, Daily + Practice, resets 1st of month.
- *
- * The user picks via a tab toggle in the screen header. We lazy-load each
- * tab: the first tap on a tab fetches it, subsequent taps reuse the cache.
- */
-enum class LeaderboardPeriod { WEEKLY_CELL, MONTHLY_GLOBAL }
+enum class LeaderboardPeriod { WEEKLY_CELL, MONTHLY_GLOBAL, TEAMS }
 
 data class LeaderboardUiState(
     val period: LeaderboardPeriod = LeaderboardPeriod.WEEKLY_CELL,
     val isLoading: Boolean = true,
-    // Cached rows per period so swapping tabs is instant after first load.
     val weeklyRows: List<LeaderboardEntry> = emptyList(),
     val monthlyRows: List<LeaderboardEntry> = emptyList(),
+    val teamRows: List<LeaderboardEntry> = emptyList(),
     val weeklyLoaded: Boolean = false,
     val monthlyLoaded: Boolean = false,
+    val teamLoaded: Boolean = false,
     val hasGroup: Boolean = true,
     val error: String? = null
 ) {
-    /** Rows for the currently-selected period. */
     val rows: List<LeaderboardEntry>
-        get() = if (period == LeaderboardPeriod.WEEKLY_CELL) weeklyRows else monthlyRows
+        get() = when (period) {
+            LeaderboardPeriod.WEEKLY_CELL -> weeklyRows
+            LeaderboardPeriod.MONTHLY_GLOBAL -> monthlyRows
+            LeaderboardPeriod.TEAMS -> teamRows
+        }
 
-    /** Top 3 for the podium row. */
     val podium: List<LeaderboardEntry> get() = rows.take(3)
     val rest: List<LeaderboardEntry> get() = rows.drop(3)
     val isUserInList: Boolean get() = rows.any { it.isMe }
     val myRow: LeaderboardEntry? get() = rows.firstOrNull { it.isMe }
 
-    /** Weekly board hides when the user has no group; monthly is always open. */
     val showNoGroupCard: Boolean
         get() = period == LeaderboardPeriod.WEEKLY_CELL && !hasGroup
 }
@@ -56,6 +51,7 @@ data class LeaderboardUiState(
 class LeaderboardViewModel @Inject constructor(
     private val getWeeklyLeaderboardUseCase: GetWeeklyLeaderboardUseCase,
     private val getMonthlyGlobalLeaderboardUseCase: GetMonthlyGlobalLeaderboardUseCase,
+    private val getTeamLeaderboardUseCase: GetTeamLeaderboardUseCase,
     private val prefs: UserPreferencesRepo
 ) : ViewModel() {
 
@@ -70,13 +66,14 @@ class LeaderboardViewModel @Inject constructor(
         loadCurrent()
     }
 
-    /** Re-fetch from network for the currently selected period. */
     fun refresh() {
         when (_uiState.value.period) {
             LeaderboardPeriod.WEEKLY_CELL ->
                 _uiState.update { it.copy(weeklyLoaded = false) }
             LeaderboardPeriod.MONTHLY_GLOBAL ->
                 _uiState.update { it.copy(monthlyLoaded = false) }
+            LeaderboardPeriod.TEAMS ->
+                _uiState.update { it.copy(teamLoaded = false) }
         }
         loadCurrent()
     }
@@ -84,11 +81,11 @@ class LeaderboardViewModel @Inject constructor(
     private fun loadCurrent() {
         viewModelScope.launch {
             val s = _uiState.value
-            // Reuse cache if the active tab already has data — avoids
-            // a flash of loading every time the user toggles tabs.
-            val alreadyLoaded =
-                (s.period == LeaderboardPeriod.WEEKLY_CELL && s.weeklyLoaded) ||
-                    (s.period == LeaderboardPeriod.MONTHLY_GLOBAL && s.monthlyLoaded)
+            val alreadyLoaded = when (s.period) {
+                LeaderboardPeriod.WEEKLY_CELL -> s.weeklyLoaded
+                LeaderboardPeriod.MONTHLY_GLOBAL -> s.monthlyLoaded
+                LeaderboardPeriod.TEAMS -> s.teamLoaded
+            }
             if (alreadyLoaded) {
                 _uiState.update { it.copy(isLoading = false, error = null) }
                 return@launch
@@ -98,6 +95,7 @@ class LeaderboardViewModel @Inject constructor(
             when (_uiState.value.period) {
                 LeaderboardPeriod.WEEKLY_CELL -> loadWeekly()
                 LeaderboardPeriod.MONTHLY_GLOBAL -> loadMonthly()
+                LeaderboardPeriod.TEAMS -> loadTeam()
             }
         }
     }
@@ -138,6 +136,22 @@ class LeaderboardViewModel @Inject constructor(
                     isLoading = false,
                     monthlyRows = r.data,
                     monthlyLoaded = true
+                )
+            }
+            is Result.Error -> _uiState.update {
+                it.copy(isLoading = false, error = r.message)
+            }
+            Result.Loading -> Unit
+        }
+    }
+
+    private suspend fun loadTeam() {
+        when (val r = getTeamLeaderboardUseCase(limit = 25)) {
+            is Result.Success -> _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    teamRows = r.data,
+                    teamLoaded = true
                 )
             }
             is Result.Error -> _uiState.update {

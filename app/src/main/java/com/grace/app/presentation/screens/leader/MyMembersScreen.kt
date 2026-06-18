@@ -52,8 +52,6 @@ fun MyMembersScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val withCheckIns = state.mentees.count { it.lastCheckInAt != null }
 
-    // Re-fetch on every screen entry so a freshly-added proxy member shows up
-    // immediately after the form pops back here.
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refresh() }
 
     Column(
@@ -77,7 +75,6 @@ fun MyMembersScreen(
                     color = GraceCreamDim, fontSize = 12.sp
                 )
             }
-            // + Add — opens the proxy-member registration form.
             Text(
                 "+ Add",
                 color = GraceGold, fontSize = 13.sp,
@@ -147,8 +144,6 @@ private fun MenteeRow(mentee: Mentee, onClick: () -> Unit) {
                     )
                     if (mentee.user.isProxyOnly) {
                         Spacer(Modifier.size(6.dp))
-                        // Subtle "no app" badge so leaders can scan the list
-                        // and know which members they need to act for.
                         Text(
                             "NO APP",
                             color = GraceCreamDim,
@@ -164,8 +159,6 @@ private fun MenteeRow(mentee: Mentee, onClick: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.size(2.dp))
-                // Proxy members often have no email — fall back to a friendly
-                // line about their cell / leader proxy status.
                 val subtitle = if (mentee.user.email.isNotBlank()) {
                     mentee.user.email
                 } else {

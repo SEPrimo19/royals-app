@@ -11,11 +11,6 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WeeklyMeditationDao {
 
-    /**
-     * The meditation whose [start_date, end_date] range contains [today].
-     * Returns null between weeks (e.g. the gap between week 4 and week 5
-     * has Jun 29 - Jul 5 with no scheduled meditation in the 2026 plan).
-     */
     @Query("""
         SELECT * FROM weekly_meditations
         WHERE is_active = 1
@@ -41,7 +36,6 @@ interface WeeklyMeditationDao {
 @Dao
 interface MeditationSubmissionDao {
 
-    /** Current user's submissions — newest first, drives My Reflections list. */
     @Query("""
         SELECT * FROM meditation_submissions
         WHERE user_id = :userId

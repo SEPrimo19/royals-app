@@ -7,21 +7,18 @@ import com.grace.app.domain.util.Result
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-/** Drives the "This Week's Meditation" tab inside the Devotional screen. */
 class GetCurrentWeekMeditationUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {
     operator fun invoke(): Flow<WeeklyMeditation?> = repo.observeCurrentMeditation()
 }
 
-/** Drives the "My Reflections" list (in the user's profile / progress). */
 class GetMyMeditationSubmissionsUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {
     operator fun invoke(): Flow<List<MeditationSubmission>> = repo.observeMySubmissions()
 }
 
-/** Find the current user's own submission for a specific meditation. */
 class FindMyMeditationSubmissionUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {
@@ -29,7 +26,6 @@ class FindMyMeditationSubmissionUseCase @Inject constructor(
         repo.findMySubmission(meditationId)
 }
 
-/** Upsert the current user's reflection for a specific meditation. */
 class SubmitMeditationReflectionUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {
@@ -37,11 +33,6 @@ class SubmitMeditationReflectionUseCase @Inject constructor(
         repo.submitReflection(meditationId, text)
 }
 
-/**
- * Leader-view: fetch a specific member's submissions. RLS in Supabase
- * gates who actually receives rows — non-allowed callers get an empty list,
- * not an error, by design.
- */
 class GetMeditationSubmissionsForUserUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {
@@ -49,7 +40,6 @@ class GetMeditationSubmissionsForUserUseCase @Inject constructor(
         repo.getSubmissionsForUser(userId)
 }
 
-/** Admin curation list — every meditation, newest first. */
 class GetAllMeditationsUseCase @Inject constructor(
     private val repo: WeeklyMeditationRepository
 ) {

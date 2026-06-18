@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
 # Royals (internal: GRACE) — git ignore
 # ---------------------------------------------------------------------------
 
@@ -80,6 +80,12 @@ supabase/.branches/
 # --- Brand source assets (logos, design files) ---
 # Kept local as the original brand-design materials for the ministry.
 /asset/
+
+# --- Personal / sensitive PDFs (compliance examples, planning docs) ---
+# Kept local — these contain real attendee data or ministry-internal
+# planning that doesn't belong on a public repo.
+/Template/
+*.pdf
 
 # --- Brand logo files inside the app — also excluded from the repo ---
 # These files MUST exist on the LOCAL filesystem for the app to build

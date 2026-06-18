@@ -57,17 +57,11 @@ import kotlinx.coroutines.withContext
 @Composable
 fun EventRosterScreen(
     onBack: () -> Unit,
-    // Phase P.2.6 — opens the AddProxyMember form pre-wired with this
-    // event's id, so the form's "Save & Mark Attended" path can register
-    // the new member AND mark them present in one shot. The eventId is
-    // resolved from the screen's nav arg by the parent (NavGraph), so the
-    // callback takes no parameters here.
     onAddProxyMember: () -> Unit,
     viewModel: EventRosterViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Toast auto-dismiss — same 2.5s window as other screens.
     if (state.toast != null) {
         LaunchedEffect(state.toast) {
             kotlinx.coroutines.delay(2500)
@@ -114,8 +108,6 @@ fun EventRosterScreen(
                     )
                 }
             }
-            // P.2.6 — register a new no-app member mid-meeting + auto-mark
-            // them attended. Same styling as MyMembers' + Add chip.
             Text(
                 "+ Add",
                 color = GraceGold, fontSize = 13.sp,
@@ -148,8 +140,6 @@ fun EventRosterScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        // Summary line — after the event ends, swap "still pending" for
-        // "absent" so the leader sees an unambiguous count.
         val pendingLabel = if (state.eventHasEnded) "absent" else "still pending"
         Text(
             "$markedCount marked · $notYetCount $pendingLabel",
@@ -165,7 +155,6 @@ fun EventRosterScreen(
             }
         )
 
-        // Export filtered roster — only meaningful once the roster has loaded.
         if (!state.isLoading && state.roster.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
             ExportRosterRow(
@@ -300,12 +289,6 @@ private fun ExportRosterRow(
     )
 }
 
-/**
- * Build a Compassion-style PDF for the event roster, scoped to the active
- * filter. Reuses the same PdfExporter cover + section blocks the My
- * Progress + admin compliance reports use — consistent visual identity
- * across all leader-facing exports.
- */
 private fun buildRosterReport(
     event: com.grace.app.domain.model.Event,
     filter: RosterFilter,
@@ -359,8 +342,6 @@ private fun buildRosterReport(
 private fun RosterRow(
     row: Attendee,
     isWorking: Boolean,
-    // Flips the "Not yet marked" subtitle to "Absent" once the event's
-    // check-in window has closed — makes the unmarked rows unambiguous.
     eventHasEnded: Boolean,
     onMark: (AttendanceStatus) -> Unit,
     onUndo: () -> Unit
@@ -405,9 +386,6 @@ private fun RosterRow(
                             )
                         }
                     }
-                    // Status pill OR pending placeholder. Once the event
-                    // has ended, "Not yet marked" becomes "Absent" — the
-                    // leader didn't get to them and now they're out.
                     if (row.status == AttendanceStatus.ABSENT) {
                         if (eventHasEnded) {
                             StatusPill(AttendanceStatus.ABSENT, 0)
@@ -421,8 +399,6 @@ private fun RosterRow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusPill(row.status, row.lateByMinutes)
                             Spacer(Modifier.size(8.dp))
-                            // Undo only available for non-absent rows. Stays
-                            // enabled even when isWorking — re-tap is harmless.
                             Text(
                                 "Undo",
                                 color = GraceRose, fontSize = 11.sp,
@@ -440,7 +416,6 @@ private fun RosterRow(
                     )
                 }
             }
-            // Action buttons appear ONLY for not-yet-marked members.
             if (row.status == AttendanceStatus.ABSENT) {
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

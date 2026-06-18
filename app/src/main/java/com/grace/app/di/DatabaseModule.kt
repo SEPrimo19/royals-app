@@ -52,4 +52,9 @@ object DatabaseModule {
     @Provides
     fun provideMeditationSubmissionDao(db: GraceDatabase): MeditationSubmissionDao =
         db.meditationSubmissionDao()
+
+    @Provides
+    fun provideDiscipleshipDao(
+        db: GraceDatabase
+    ): com.grace.app.data.local.dao.DiscipleshipDao = db.discipleshipDao()
 }

@@ -5,9 +5,9 @@ import com.grace.app.data.remote.supabase.dto.UserDto
 import com.grace.app.domain.model.User
 import com.grace.app.domain.model.UserRole
 
-// Unknown/garbage role strings must never crash — fall back to MEMBER.
-private fun parseRole(raw: String?): UserRole = when (raw?.trim()?.lowercase()) {
+internal fun parseRoleString(raw: String?): UserRole = when (raw?.trim()?.lowercase()) {
     "cell_leader" -> UserRole.CELL_LEADER
+    "council" -> UserRole.COUNCIL
     "youth_president" -> UserRole.YOUTH_PRESIDENT
     "pastor" -> UserRole.PASTOR
     "admin" -> UserRole.ADMIN
@@ -18,13 +18,10 @@ private fun UserRole.toDbValue(): String = name.lowercase()
 
 fun UserDto.toDomain(): User = User(
     id = id,
-    // Proxy members can have NULL email at the DB layer; normalize to ""
-    // for the domain model so UI code doesn't have to handle two empty
-    // states. Real accounts always have a non-null value.
     email = email ?: "",
     name = name,
     avatarUrl = avatarUrl,
-    role = parseRole(role),
+    role = parseRoleString(role),
     groupId = groupId,
     streak = streak,
     lastDevoAt = parseDateOrNull(lastDevoAt),
@@ -64,7 +61,7 @@ fun UserEntity.toDomain(): User = User(
     email = email,
     name = name,
     avatarUrl = avatarUrl,
-    role = parseRole(role),
+    role = parseRoleString(role),
     groupId = groupId,
     streak = streak,
     lastDevoAt = parseDateOrNull(lastDevoAt),

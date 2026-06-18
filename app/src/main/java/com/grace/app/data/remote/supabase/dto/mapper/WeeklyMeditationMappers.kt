@@ -8,7 +8,6 @@ import com.grace.app.domain.model.MeditationSubmission
 import com.grace.app.domain.model.MeditationTheme
 import com.grace.app.domain.model.WeeklyMeditation
 
-// Garbage theme values fall back to JESUS — never crash on bad data.
 private fun parseTheme(raw: String?): MeditationTheme = when (raw?.trim()?.uppercase()) {
     "EDUCATION" -> MeditationTheme.EDUCATION
     "FAMILY" -> MeditationTheme.FAMILY
@@ -17,9 +16,7 @@ private fun parseTheme(raw: String?): MeditationTheme = when (raw?.trim()?.upper
     "RELATIONSHIPS" -> MeditationTheme.RELATIONSHIPS
     else -> MeditationTheme.JESUS
 }
-// parseDate + parseDateTime are shared via MapperUtil in this package.
 
-// ---- WeeklyMeditation ------------------------------------------------------
 fun WeeklyMeditationDto.toEntity(): WeeklyMeditationEntity = WeeklyMeditationEntity(
     id = id,
     weekNumber = weekNumber,
@@ -52,7 +49,6 @@ fun WeeklyMeditationEntity.toDomain(): WeeklyMeditation = WeeklyMeditation(
 
 fun WeeklyMeditationDto.toDomain(): WeeklyMeditation = toEntity().toDomain()
 
-// ---- MeditationSubmission --------------------------------------------------
 fun MeditationSubmissionDto.toEntity(): MeditationSubmissionEntity =
     MeditationSubmissionEntity(
         id = id,

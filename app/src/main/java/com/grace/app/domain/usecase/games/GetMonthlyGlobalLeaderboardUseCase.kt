@@ -5,11 +5,6 @@ import com.grace.app.domain.repository.GamesRepository
 import com.grace.app.domain.util.Result
 import javax.inject.Inject
 
-/**
- * Monthly leaderboard across the entire church. Includes BOTH Daily
- * Challenge and Practice points. Resets on the 1st of each calendar
- * month automatically (server-side `date_trunc('month', NOW())`).
- */
 class GetMonthlyGlobalLeaderboardUseCase @Inject constructor(
     private val gamesRepository: GamesRepository
 ) {

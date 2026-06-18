@@ -38,15 +38,6 @@ import com.grace.app.presentation.theme.GraceGreen
 import com.grace.app.presentation.theme.GraceRose
 import kotlinx.coroutines.flow.collectLatest
 
-/**
- * Shown on first signin if a proxy-only user row matches the new user's
- * email. They can confirm to inherit the history their cell leader has
- * been building up, or dismiss if it isn't them.
- *
- * [onDone] fires when the screen has nothing more to show — either the
- * user dismissed, the claim succeeded, or no proxy was found in the
- * first place. The host (NavGraph / MainActivity) routes to Home.
- */
 @Composable
 fun ClaimRecordScreen(
     onDone: () -> Unit,
@@ -59,8 +50,6 @@ fun ClaimRecordScreen(
             when (fx) {
                 ClaimRecordEffect.Done -> onDone()
                 ClaimRecordEffect.Claimed -> {
-                    // Short delay so the user sees the "✓ Claimed" toast
-                    // before the screen pops.
                     kotlinx.coroutines.delay(1500)
                     onDone()
                 }

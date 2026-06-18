@@ -1,12 +1,3 @@
-// Admin-only bulk email sender. Audience options:
-//   - all                       → every member with email
-//   - role(s) only              → only the named roles
-//   - group only                → only members of one cell group
-// Auth model: the function reads the caller's JWT (forwarded by supabase-js
-// when invoke() is called from a signed-in client), looks up their role in
-// the users table, and rejects anyone who isn't youth_president/pastor/admin.
-// Service role is used internally for the actual user query so RLS doesn't
-// block the audience lookup.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -24,7 +15,6 @@ type Body = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const resendKey = Deno.env.get("RESEND_API_KEY")!;
-// e.g. "GRACE Youth <ministry@yourchurch.org>" — must be a verified Resend sender.
 const fromEmail = Deno.env.get("BULK_EMAIL_FROM") ?? "GRACE <noreply@grace.app>";
 
 const SENIOR_ROLES = new Set(["youth_president", "pastor", "admin"]);
@@ -39,7 +29,6 @@ function escapeHtml(s: string): string {
 }
 
 function htmlBody(message: string): string {
-  // Preserve paragraph breaks — Resend supports raw HTML.
   const paragraphs = message
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 12px 0; line-height:1.5">${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`)
@@ -57,7 +46,6 @@ function htmlBody(message: string): string {
 
 async function getCallerRole(authHeader: string | null): Promise<string | null> {
   if (!authHeader) return null;
-  // Validate JWT by asking Supabase Auth — handles signature + expiry.
   const userClient = createClient(supabaseUrl, serviceKey, {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false },
@@ -139,8 +127,6 @@ Deno.serve(async (req) => {
   }
 
   const html = htmlBody(body.message);
-  // Resend has per-request rate limits — send in series of small batches.
-  // For typical youth-ministry sizes (< 200 members) this is plenty fast.
   let sent = 0;
   for (const r of recipients) {
     const ok = await sendViaResend(r.email, body.subject, html);

@@ -69,7 +69,7 @@ fun LoginScreen(
             when (effect) {
                 LoginEffect.NavigateToHome -> onNavigateHome()
                 LoginEffect.NavigateToSignUp -> onNavigateSignUp()
-                is LoginEffect.ShowError -> Unit // surfaced inline via generalError
+                is LoginEffect.ShowError -> Unit
             }
         }
     }
@@ -133,10 +133,6 @@ fun LoginScreen(
             )
         }
 
-        // Forgot-password link — placed BETWEEN the password field's error
-        // (above) and the Sign-In button so users see it as a recovery
-        // option when their login attempt fails. Right-aligned so it
-        // doesn't compete with the centered Sign-In button visually.
         Spacer(Modifier.height(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -166,10 +162,6 @@ fun LoginScreen(
         Spacer(Modifier.height(16.dp))
         GoogleSignInButton(enabled = !state.isLoading) { result ->
             when (result) {
-                // Success: MainActivity's sessionStatus observer sees the
-                // new Authenticated session, syncs DataStore, and the
-                // NavHost re-keys to MAIN_GRAPH automatically. Nothing
-                // more for the screen to do.
                 NativeSignInResult.Success -> Unit
                 is NativeSignInResult.Error -> viewModel.onEvent(
                     LoginEvent.GoogleSignInFailed(friendlyOAuthError(result.message))
@@ -205,17 +197,6 @@ fun LoginScreen(
     }
 }
 
-/**
- * Modal sheet for password reset. Two states layered into one dialog:
- *   - Default: email field + Send button
- *   - sent=true: success message + Done button (Send is hidden so the
- *     user can't accidentally double-send and trigger Supabase Auth's
- *     rate limit)
- *
- * Account-enumeration defense: regardless of whether the email is
- * registered, we always reach the "Check your email" success state.
- * Supabase Auth handles the silent no-op for unknown addresses.
- */
 @Composable
 private fun ForgotPasswordDialog(
     email: String,
@@ -296,15 +277,6 @@ private fun ForgotPasswordDialog(
     )
 }
 
-/**
- * Reusable Google button — invokes Credential Manager via Supabase's
- * compose-auth plugin. Opens an in-app bottom sheet (One Tap) instead of a
- * browser. Same callback shape on Login and SignUp; the parent screen only
- * gets a high-level result and decides what to do.
- *
- * onResult receives a tri-state: success (the session has already been set on
- * the Supabase client by the time this runs), explicit error, or user-cancel.
- */
 @OptIn(SupabaseExperimental::class)
 @Composable
 internal fun GoogleSignInButton(
@@ -312,7 +284,6 @@ internal fun GoogleSignInButton(
     onResult: (NativeSignInResult) -> Unit
 ) {
     val context = LocalContext.current
-    // SupabaseClient via EntryPoint — composables can't constructor-inject.
     val supabase: SupabaseClient = remember(context) {
         EntryPointAccessors
             .fromApplication(context.applicationContext, SupabaseEntryPoint::class.java)
@@ -331,9 +302,6 @@ internal fun GoogleSignInButton(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        // Plain "G" glyph in Google-ish colors — avoids shipping a logo asset
-        // that would need brand-guideline review. Replace with the proper
-        // Google-G SVG later if you want pixel-perfect brand.
         Text("G", color = GraceGold, fontSize = 18.sp)
         Spacer(Modifier.height(0.dp))
         Text(
@@ -344,11 +312,6 @@ internal fun GoogleSignInButton(
     }
 }
 
-/**
- * Maps raw compose-auth / Ktor / Supabase error strings to user-safe copy.
- * Reused by SignUpScreen via internal visibility so the Google failure UX
- * stays identical on both screens.
- */
 internal fun friendlyOAuthError(raw: String): String {
     val lower = raw.lowercase()
     return when {

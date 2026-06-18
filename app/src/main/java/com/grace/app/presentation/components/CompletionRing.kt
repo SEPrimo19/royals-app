@@ -47,8 +47,6 @@ fun CompletionRing(
         animationSpec = spring(),
         label = "check_scale"
     )
-    // Resolve palette colors OUTSIDE the Canvas — DrawScope isn't a
-    // @Composable context so it can't read LocalGracePalette directly.
     val greenColor = GraceGreen
     val mutedColor = GraceMuted
     val ringColor = if (isDone) greenColor else GraceGold

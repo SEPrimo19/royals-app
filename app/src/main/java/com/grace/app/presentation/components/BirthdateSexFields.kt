@@ -38,13 +38,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/**
- * Tappable card that opens a Material3 DatePicker. Shared by every form
- * that collects a birthdate — AddProxyMember, ProfileSetup, EditProfile.
- *
- * Caller passes the current value (nullable until picked) + a change lambda.
- * Empty state shows a "Tap to pick a date" placeholder.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BirthdateField(value: LocalDate?, onChange: (LocalDate) -> Unit) {
@@ -97,12 +90,6 @@ fun BirthdateField(value: LocalDate?, onChange: (LocalDate) -> Unit) {
     }
 }
 
-/**
- * Two-pill segmented selector for sex (M / F). Shared by AddProxyMember,
- * ProfileSetup, and EditProfile so the visual contract stays consistent.
- *
- * `current` is the empty string until picked, then "M" or "F".
- */
 @Composable
 fun SexSelector(current: String, onSelect: (String) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

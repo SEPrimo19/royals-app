@@ -1,15 +1,4 @@
--- =============================================================================
--- GRACE — Bug-fix migration (smoke-test pass #3)
---
--- The original schema enabled RLS on posts / reactions / comments / mood_checkins
--- but never added INSERT/SELECT policies — same oversight as checkins.
--- Postgres denies by default → "new row violates row-level security policy".
---
--- Safe to re-run.
--- Run in: Supabase Dashboard → SQL Editor → paste → Run.
--- =============================================================================
 
--- ---- POSTS -----------------------------------------------------------------
 DROP POLICY IF EXISTS "posts_select"        ON posts;
 DROP POLICY IF EXISTS "posts_insert_own"    ON posts;
 DROP POLICY IF EXISTS "posts_update_own"    ON posts;
@@ -22,11 +11,9 @@ CREATE POLICY "posts_select" ON posts
 CREATE POLICY "posts_insert_own" ON posts
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Author can edit their own post.
 CREATE POLICY "posts_update_own" ON posts
   FOR UPDATE USING (auth.uid() = user_id);
 
--- Leaders can highlight any post (sets is_highlighted / highlighted_by).
 CREATE POLICY "posts_update_leader" ON posts
   FOR UPDATE USING (
     EXISTS (
@@ -39,7 +26,6 @@ CREATE POLICY "posts_update_leader" ON posts
 CREATE POLICY "posts_delete_own" ON posts
   FOR DELETE USING (auth.uid() = user_id);
 
--- ---- REACTIONS -------------------------------------------------------------
 DROP POLICY IF EXISTS "reactions_select"     ON reactions;
 DROP POLICY IF EXISTS "reactions_insert_own" ON reactions;
 DROP POLICY IF EXISTS "reactions_update_own" ON reactions;
@@ -57,7 +43,6 @@ CREATE POLICY "reactions_update_own" ON reactions
 CREATE POLICY "reactions_delete_own" ON reactions
   FOR DELETE USING (auth.uid() = user_id);
 
--- ---- COMMENTS --------------------------------------------------------------
 DROP POLICY IF EXISTS "comments_select"     ON comments;
 DROP POLICY IF EXISTS "comments_insert_own" ON comments;
 DROP POLICY IF EXISTS "comments_delete_own" ON comments;
@@ -71,8 +56,6 @@ CREATE POLICY "comments_insert_own" ON comments
 CREATE POLICY "comments_delete_own" ON comments
   FOR DELETE USING (auth.uid() = user_id);
 
--- ---- MOOD CHECK-INS --------------------------------------------------------
--- Schema had a SELECT-own policy but no INSERT.
 DROP POLICY IF EXISTS "mood_insert_own" ON mood_checkins;
 
 CREATE POLICY "mood_insert_own" ON mood_checkins

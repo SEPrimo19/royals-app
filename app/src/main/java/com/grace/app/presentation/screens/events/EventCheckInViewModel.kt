@@ -21,7 +21,6 @@ data class EventCheckInUiState(
     val isLoading: Boolean = true,
     val isCheckingIn: Boolean = false,
     val isDone: Boolean = false,
-    // Filled when isDone == true — server-computed.
     val resultStatus: AttendanceStatus? = null,
     val resultLateMinutes: Int = 0,
     val error: String? = null

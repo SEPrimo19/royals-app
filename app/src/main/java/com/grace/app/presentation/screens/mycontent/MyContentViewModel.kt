@@ -30,12 +30,6 @@ import javax.inject.Inject
 
 enum class MyContentTab { PRAYERS, POSTS, REFLECTIONS }
 
-/**
- * One row in the "My Reflections" tab. The submission has the user's text +
- * timestamps; the meditation provides the surrounding context (title, theme,
- * scripture ref) for the card. meditation is nullable to defend against the
- * race where a meditation was deleted server-side but a submission remains.
- */
 data class MyReflectionItem(
     val submission: MeditationSubmission,
     val meditation: WeeklyMeditation?
@@ -91,14 +85,8 @@ class MyContentViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            // Sequential awaits — Kotlin 2.0 requires the explicit helper
-            // below so smart-casting a star-projected Result.Success doesn't
-            // lose the List<T> type.
             val prayers = getMyPrayersUseCase().dataOrEmpty()
             val posts = getMyPostsUseCase().dataOrEmpty()
-            // Join my submissions with the meditation library so the cards
-            // can show title + theme + week. Both flows are offline-first
-            // via Room — first() grabs the latest cached value instantly.
             val subs = runCatching {
                 getMyMeditationSubmissionsUseCase().first()
             }.getOrDefault(emptyList())
@@ -157,8 +145,6 @@ class MyContentViewModel @Inject constructor(
         }
     }
 
-    /** Tiny typed helper so the smart-cast survives — Result<List<T>> in,
-     *  List<T> out. Saves repeating `(result as? Success<List<T>>)?.data` casts. */
     private fun <T> Result<List<T>>.dataOrEmpty(): List<T> = when (this) {
         is Result.Success -> data
         else -> emptyList()

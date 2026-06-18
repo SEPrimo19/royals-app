@@ -60,8 +60,6 @@ fun GamesHomeScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Refresh on every entry — VM persists across navigation, so without
-    // this the streak/points wouldn't reflect a just-finished challenge.
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     Column(
@@ -100,8 +98,6 @@ fun GamesHomeScreen(
                 letterSpacing = 2.sp, fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(8.dp))
-            // Three independent cards — each locks for 24h after completion.
-            // Streak fires when ANY difficulty is completed today.
             DifficultyCard(
                 difficulty = com.grace.app.domain.model.GameDifficulty.EASY,
                 stats = state.stats,
@@ -130,18 +126,12 @@ fun GamesHomeScreen(
             Spacer(Modifier.height(14.dp))
             PracticeCard(onClick = onStartPractice)
             Spacer(Modifier.height(8.dp))
-            // v2 mode — Who Am I? Practice-only for now; lives next to
-            // Trivia Practice so users discover both as untimed "play more"
-            // entry points.
             WhoAmICard(onClick = onStartWhoAmI)
             Spacer(Modifier.height(8.dp))
-            // v2 mode — Memory Cards. Practice-only for v1.
             MemoryCardsCard(onClick = onStartMemoryMatch)
             Spacer(Modifier.height(8.dp))
-            // v2 mode — Verse Scramble. Practice-only for v1.
             VerseScrambleCard(onClick = onStartVerseScramble)
             Spacer(Modifier.height(8.dp))
-            // v2 mode — Timeline Sorting. Practice-only for v1.
             TimelineSortCard(onClick = onStartTimelineSort)
             Spacer(Modifier.height(20.dp))
             LeaderboardPreview(state.leaderboardPreview, onViewAll = onViewLeaderboard)
@@ -172,8 +162,6 @@ private fun StatsHero(stats: GameStats) {
             StatTile(
                 emoji = "⭐",
                 value = stats.totalPoints.toString(),
-                // Now reports this month's sum (Daily + Practice), matching
-                // the monthly global leaderboard. Resets on the 1st.
                 label = "This month",
                 accent = GracePurple,
                 modifier = Modifier.weight(1f)
@@ -338,10 +326,6 @@ private fun PracticeCard(onClick: () -> Unit) {
     }
 }
 
-/**
- * Who Am I? entry card on the hub. Practice-only for v1 — counts toward
- * monthly global leaderboard via game_attempts(mode = 'who_am_i').
- */
 @Composable
 private fun WhoAmICard(onClick: () -> Unit) {
     Card(
@@ -371,10 +355,6 @@ private fun WhoAmICard(onClick: () -> Unit) {
     }
 }
 
-/**
- * Memory Cards entry card on the hub. Practice-only for v1 — feeds the
- * monthly global leaderboard via game_attempts(mode = 'memory_match').
- */
 @Composable
 private fun MemoryCardsCard(onClick: () -> Unit) {
     Card(
@@ -404,10 +384,6 @@ private fun MemoryCardsCard(onClick: () -> Unit) {
     }
 }
 
-/**
- * Verse Scramble entry card on the hub. Practice-only for v1 — feeds the
- * monthly global leaderboard via game_attempts(mode = 'verse_scramble').
- */
 @Composable
 private fun VerseScrambleCard(onClick: () -> Unit) {
     Card(
@@ -437,10 +413,6 @@ private fun VerseScrambleCard(onClick: () -> Unit) {
     }
 }
 
-/**
- * Timeline Sorting entry card on the hub. Practice-only for v1 — feeds
- * the monthly global leaderboard via game_attempts(mode = 'timeline_sort').
- */
 @Composable
 private fun TimelineSortCard(onClick: () -> Unit) {
     Card(
@@ -481,19 +453,17 @@ private fun LeaderboardPreview(rows: List<LeaderboardEntry>, onViewAll: () -> Un
             fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(1f)
         )
-        if (rows.isNotEmpty()) {
-            Text(
-                "See all →",
-                color = GraceGold, fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.clickable { onViewAll() }
-            )
-        }
+        Text(
+            "See all →",
+            color = GraceGold, fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.clickable { onViewAll() }
+        )
     }
     Spacer(Modifier.height(8.dp))
     if (rows.isEmpty()) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().clickable { onViewAll() },
             colors = CardDefaults.cardColors(containerColor = GraceCardBg),
             shape = RoundedCornerShape(14.dp)
         ) {
@@ -510,7 +480,7 @@ private fun LeaderboardPreview(rows: List<LeaderboardEntry>, onViewAll: () -> Un
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "Play today's Daily Challenge to be the first on the board!",
+                    "Play to join the board — or tap to see the Monthly · Global board.",
                     color = GraceCreamDim, fontSize = 11.sp
                 )
             }
@@ -567,10 +537,9 @@ private fun LeaderboardRow(rank: Int, row: LeaderboardEntry) {
     }
 }
 
-/** "in 14h 23m" — friendly countdown until the next Daily Challenge unlocks. */
 private fun countdownLabel(lastDaily: LocalDateTime?): String {
     if (lastDaily == null) return "in a moment"
-    val next = lastDaily.plusHours(24)
+    val next = GameStats.nextDailyUnlock(lastDaily)
     val now = LocalDateTime.now()
     if (!next.isAfter(now)) return "now"
     val mins = Duration.between(now, next).toMinutes()

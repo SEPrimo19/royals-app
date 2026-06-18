@@ -27,25 +27,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
-/**
- * QR renderer. Encodes the BitMatrix on a worker thread, rasterizes it into
- * a Bitmap ONCE, then displays the bitmap via Image() — single draw per
- * frame, fully cached.
- *
- * Previous version drew every cell of a 512x512 matrix via per-cell Canvas
- * drawRect calls on every recomposition (~100K draw calls per frame). On
- * low-end devices that triggered ANRs; even on faster devices it pinned a
- * CPU core when the parent screen recomposed. The bitmap approach is one
- * Image draw, no per-frame iteration.
- *
- * Encode is bounded by [ENCODE_TIMEOUT_MS] so a pathological input or stuck
- * encoder can't hang the UI indefinitely — we show "Couldn't generate QR."
- * after the timeout fires.
- */
 
-// 256-module matrix is plenty for our short URLs (~52 chars produces a
-// natural ~33-module QR; we ask for 256 modules to give it room to scale
-// without aliasing). Smaller than 512² means quarter the bitmap memory.
 private const val MATRIX_SIZE = 256
 private const val ENCODE_TIMEOUT_MS = 3_000L
 
@@ -76,10 +58,6 @@ fun QrCode(
                         .encode(content, BarcodeFormat.QR_CODE,
                             MATRIX_SIZE, MATRIX_SIZE, hints)
 
-                    // Rasterize once. setPixel is slow individually but
-                    // tolerable for a ≤256² one-shot off the main thread.
-                    // The resulting Bitmap is cached for the lifetime of
-                    // this composition — no per-frame iteration cost.
                     val bmp = Bitmap.createBitmap(
                         matrix.width, matrix.height, Bitmap.Config.ARGB_8888
                     )
@@ -95,19 +73,16 @@ fun QrCode(
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            null  // handled by the null-check below → fallback text
+            null
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
-            null  // any other encode failure → same fallback
+            null
         }
     }
 
     val bmp = bitmapState.value
     if (bmp == null) {
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            // Show spinner while encoding; on timeout/error it will stay
-            // spinning briefly then settle on the next state. Acceptable
-            // UX — error path is rare since QR content here is short URLs.
             CircularProgressIndicator(
                 color = foreground,
                 modifier = Modifier.size(40.dp)
@@ -121,8 +96,6 @@ fun QrCode(
         contentDescription = null,
         modifier = modifier,
         contentScale = ContentScale.Fit,
-        // QR codes are pixel-art; bilinear filtering would blur the edges
-        // when scaled up. None preserves crisp module boundaries.
         filterQuality = FilterQuality.None
     )
 }

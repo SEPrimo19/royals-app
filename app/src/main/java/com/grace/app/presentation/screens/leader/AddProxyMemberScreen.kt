@@ -80,14 +80,13 @@ fun AddProxyMemberScreen(
         }
         Spacer(Modifier.height(16.dp))
 
-        // Name
         FormLabel("Full name")
         OutlinedTextField(
             value = state.name,
             onValueChange = { viewModel.onEvent(AddProxyMemberEvent.NameChanged(it)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Mark Reyes", color = GraceCreamDim) }
+            placeholder = { Text("Juan Dela Cruz", color = GraceCreamDim) }
         )
 
         Spacer(Modifier.height(16.dp))
@@ -105,8 +104,6 @@ fun AddProxyMemberScreen(
         )
 
         Spacer(Modifier.height(16.dp))
-        // Compassion section reuses the shared component — same look as
-        // signup + edit profile flows. Composes "PH867-XXXX" on submit.
         CompassionSection(
             isCompassion = state.isCompassion,
             digits = state.compassionDigits,
@@ -136,7 +133,7 @@ fun AddProxyMemberScreen(
             onValueChange = { viewModel.onEvent(AddProxyMemberEvent.EmailChanged(it)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("mark@example.com", color = GraceCreamDim) },
+            placeholder = { Text("juan@example.com", color = GraceCreamDim) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
 
@@ -146,12 +143,6 @@ fun AddProxyMemberScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        // Phase P.2.6 — when launched from an EventRoster (attendForEventId
-        // set), promote "Save & Mark Attended" to the primary CTA. Leaders
-        // mid-meeting overwhelmingly want both actions in one tap. Plain
-        // "Add Member" stays available as a secondary in case they don't
-        // want to attribute attendance (e.g. registering for a future
-        // event).
         if (state.attendForEventId != null) {
             Button(
                 onClick = {
@@ -189,7 +180,7 @@ fun AddProxyMemberScreen(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "Mark will appear in your cell roster + reports. He won't " +
+            "Juan will appear in your cell roster + reports. He won't " +
                 "have his own app account — you'll log his actions for him.",
             color = GraceCreamDim, fontSize = 11.sp
         )
@@ -204,6 +195,3 @@ private fun FormLabel(text: String) {
     Spacer(Modifier.height(4.dp))
 }
 
-// SexSelector + BirthdateField now live in
-// com.grace.app.presentation.components for cross-screen reuse —
-// ProfileSetup and EditProfile share the same widgets.

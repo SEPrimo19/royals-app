@@ -119,7 +119,6 @@ fun AdminComplianceReportScreen(
             Text("⚠ ${state.error}", color = GraceRose, fontSize = 12.sp)
         }
 
-        // ---- Audience + Period dropdowns ---------------------------------
         Spacer(Modifier.height(18.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -168,7 +167,6 @@ fun AdminComplianceReportScreen(
             }
         }
 
-        // ---- Summary preview --------------------------------------------
         Spacer(Modifier.height(16.dp))
         if (state.isLoading) {
             Box(Modifier.fillMaxWidth().height(120.dp), Alignment.Center) {
@@ -178,7 +176,6 @@ fun AdminComplianceReportScreen(
             state.report?.let { SummaryCard(it) }
         }
 
-        // ---- Roster preview (top N) --------------------------------------
         state.report?.let { report ->
             Spacer(Modifier.height(12.dp))
             Text(
@@ -187,8 +184,6 @@ fun AdminComplianceReportScreen(
                 letterSpacing = 2.sp, fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(6.dp))
-            // Preview the first ~10; full list lands in the PDF. Avoids
-            // turning the screen into a giant list when rosters are big.
             report.rows.take(10).forEach { row ->
                 RosterPreviewRow(row)
                 Spacer(Modifier.height(6.dp))
@@ -201,7 +196,6 @@ fun AdminComplianceReportScreen(
             }
         }
 
-        // ---- Export button ----------------------------------------------
         Spacer(Modifier.height(20.dp))
         val canExport = !isExporting && state.report != null &&
             (state.includeAttendance || state.includeMeditation)

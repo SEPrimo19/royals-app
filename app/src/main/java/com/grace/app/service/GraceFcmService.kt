@@ -56,7 +56,6 @@ class GraceFcmService : FirebaseMessagingService() {
             else -> NotificationChannels.COMMUNITY
         }
 
-        // Respect the user's per-category notification preferences.
         val enabled = runBlocking {
             when (channelId) {
                 NotificationChannels.PRAYER -> prefs.notifPrayerEnabled.first()
@@ -80,12 +79,6 @@ class GraceFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        // Small icon = crown+cross silhouette (ic_grace_notification).
-        // Android forces small icons to monochrome white in the status
-        // bar — only the alpha channel survives — so a full-color crest
-        // would just turn into a featureless white circle. The colored
-        // Royals logo goes on as the LARGE icon below instead, where
-        // Android preserves color and renders it next to the body text.
         val largeIcon = runCatching {
             android.graphics.BitmapFactory.decodeResource(
                 resources, R.drawable.royals_logo_official

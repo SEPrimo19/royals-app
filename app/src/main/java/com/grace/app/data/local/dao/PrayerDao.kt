@@ -37,10 +37,6 @@ interface PrayerDao {
     @Query("DELETE FROM prayers WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    // Drops any prayer no longer present in the remote refresh. The earlier
-    // status='active' filter let locally-answered ghosts (a stale optimistic
-    // row the user marked Answered before the next refetch) survive forever;
-    // reconciling across all statuses kills those too.
     @Query("DELETE FROM prayers WHERE id NOT IN (:keepIds)")
     suspend fun deleteNotIn(keepIds: List<String>)
 

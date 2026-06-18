@@ -10,19 +10,6 @@ import java.security.KeyStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * The Supabase JWT refresh token is sensitive and must never sit in plain
- * DataStore. It is stored here in EncryptedSharedPreferences, whose master key
- * is held in the Android Keystore (AES-256-GCM) and never leaves the device.
- *
- * **Self-healing decrypt:** If the encrypted prefs file and the Keystore
- * master-key alias get out of sync (e.g. uninstall+reinstall, device backup/
- * restore, OEM ROM behavior), the next read throws AEADBadTagException
- * inside [EncryptedSharedPreferences.create] and the whole app crashes on
- * launch. [buildPrefs] catches that, wipes both halves, and rebuilds — the
- * worst case is the user has to sign in once more. Without this, the only
- * recovery would be clearing app data in system Settings.
- */
 @Singleton
 class SecureTokenStore @Inject constructor(
     @ApplicationContext private val context: Context
@@ -44,14 +31,9 @@ class SecureTokenStore @Inject constructor(
     private fun buildPrefs(ctx: Context): SharedPreferences = try {
         createEncrypted(ctx)
     } catch (e: Throwable) {
-        // The Keystore <-> encrypted-prefs handshake is in a bad state.
-        // Surface it in Crashlytics so we can spot trends, then reset.
         CrashReporter.log("SecureTokenStore: decrypt failed; resetting Keystore alias + prefs")
         CrashReporter.recordNonFatal(e)
         resetCryptoState(ctx)
-        // Single retry — if this still throws, the Throwable propagates
-        // and Crashlytics captures the real underlying problem. We don't
-        // want to mask repeated failures with an infinite loop.
         createEncrypted(ctx)
     }
 
@@ -68,13 +50,6 @@ class SecureTokenStore @Inject constructor(
         )
     }
 
-    /**
-     * Wipe both halves of the broken state — the prefs file (encrypted
-     * keyset is in there) and the Keystore master-key alias. After this
-     * the next createEncrypted() call gets a fresh key + fresh keyset.
-     * Each step is independently wrapped so one failure doesn't block
-     * the other.
-     */
     private fun resetCryptoState(ctx: Context) {
         runCatching { ctx.deleteSharedPreferences(PREFS_NAME) }
         runCatching {

@@ -46,7 +46,6 @@ fun BottomNavBar(navController: NavController) {
 
     NavigationBar(containerColor = GraceCardBg) {
         tabs.forEach { tab ->
-            // Hierarchy-aware so selection is correct across the nested graph.
             val selected = currentDestination?.hierarchy?.any {
                 it.route == tab.screen.route
             } == true
@@ -75,6 +74,5 @@ fun BottomNavBar(navController: NavController) {
     }
 }
 
-// Reserved for the gold active-dot indicator refinement in Prompt 8 polish.
 @Suppress("unused")
 private val activeDotShape = CircleShape

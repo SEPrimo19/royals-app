@@ -4,7 +4,6 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// Queue of mutations made while offline; drained by OfflineSyncWorker on reconnect.
 @Entity(tableName = "offline_sync_queue")
 data class OfflineSyncEntity(
     @PrimaryKey(autoGenerate = false)

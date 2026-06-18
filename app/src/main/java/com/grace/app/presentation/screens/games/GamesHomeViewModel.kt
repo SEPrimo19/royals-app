@@ -38,8 +38,6 @@ class GamesHomeViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
             val stats = (getMyGameStatsUseCase() as? Result.Success)?.data
                 ?: GameStats(userId = "")
-            // Pull Top 3 for the preview tile; full Top 5 lives on the
-            // dedicated leaderboard screen (Phase 4).
             val board = (getWeeklyLeaderboardUseCase(limit = 3) as? Result.Success)
                 ?.data.orEmpty()
             _uiState.update {

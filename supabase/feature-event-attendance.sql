@@ -1,20 +1,3 @@
--- =============================================================================
--- GRACE — Feature: Event QR Attendance
---
--- Members scan a QR code at the event venue (deep link grace://event-checkin/
--- {event_id}) and an `event_attendance` row is created automatically.
---
--- The time-window trigger blocks inserts outside `event_date - 1h` to
--- `event_date + 2h` — prevents someone screenshotting the QR and "attending"
--- from home later. Composite PK prevents duplicate check-ins.
---
--- Visibility:
---   - Members can read their own attendance rows (have I attended?)
---   - Event creator + senior leaders can see the full attendee list
---   - INSERT must be by the user themselves (auth.uid() = user_id)
---
--- Safe to re-run.
--- =============================================================================
 
 CREATE TABLE IF NOT EXISTS event_attendance (
   event_id     UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -27,13 +10,10 @@ CREATE INDEX IF NOT EXISTS idx_event_attendance_event ON event_attendance (event
 
 ALTER TABLE event_attendance ENABLE ROW LEVEL SECURITY;
 
--- ---- RLS POLICIES ----------------------------------------------------------
 DROP POLICY IF EXISTS "attendance_select" ON event_attendance;
 DROP POLICY IF EXISTS "attendance_insert" ON event_attendance;
 DROP POLICY IF EXISTS "attendance_delete" ON event_attendance;
 
--- A user can always see their own rows; the event creator and senior leaders
--- can see the full roster.
 CREATE POLICY "attendance_select" ON event_attendance
   FOR SELECT USING (
     auth.uid() = user_id
@@ -44,13 +24,9 @@ CREATE POLICY "attendance_select" ON event_attendance
     )
   );
 
--- Only the user themselves can mark themselves attended. The time-window
--- trigger below adds the temporal guard.
 CREATE POLICY "attendance_insert" ON event_attendance
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- The user can remove their own check-in (mis-tap); creator/senior leaders
--- can also remove (data correction).
 CREATE POLICY "attendance_delete" ON event_attendance
   FOR DELETE USING (
     auth.uid() = user_id
@@ -61,9 +37,6 @@ CREATE POLICY "attendance_delete" ON event_attendance
     )
   );
 
--- ---- TIME-WINDOW TRIGGER ---------------------------------------------------
--- Allows check-in only while NOW() is within 1h before to 2h after event_date.
--- This is the main defense against "screenshot the QR, check in from home".
 CREATE OR REPLACE FUNCTION enforce_attendance_window() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
 DECLARE

@@ -120,22 +120,18 @@ fun MemberReportScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        // Summary of what data the leader is about to export — gives them
-        // a sanity check before tapping Generate.
         SummaryCard(
             attendanceCount = state.progressState.attendedEvents.size,
             reflectionCount = state.progressState.reflections.size
         )
 
         Spacer(Modifier.height(16.dp))
-        // Period dropdown.
         PeriodPicker(
             current = state.progressState.period,
             onSelect = { viewModel.onEvent(MemberReportEvent.PeriodChanged(it)) }
         )
 
         Spacer(Modifier.height(16.dp))
-        // Filter checkboxes — same flavor as MyProgress.
         Text("Include in report", color = GraceCreamDim, fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold)
         FilterToggle(

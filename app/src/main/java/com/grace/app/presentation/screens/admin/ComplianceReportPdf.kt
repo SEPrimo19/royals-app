@@ -6,23 +6,11 @@ import com.grace.app.domain.usecase.admin.ComplianceReportData
 import com.grace.app.domain.usecase.admin.UserComplianceRow
 import com.grace.app.presentation.screens.progress.ExportPeriod
 
-private const val COLOR_PRESENT = 0xFF3ECF8E.toInt()  // GraceGreen
-private const val COLOR_LATE    = 0xFFF4A261.toInt()  // GraceOrange
-private const val COLOR_ROSE    = 0xFFE05C7A.toInt()  // GraceRose
+private const val COLOR_PRESENT = 0xFF3ECF8E.toInt()
+private const val COLOR_LATE    = 0xFFF4A261.toInt()
+private const val COLOR_ROSE    = 0xFFE05C7A.toInt()
 private const val COLOR_MUTED   = 0xFF888888.toInt()
 
-/**
- * Builds the bulk compliance PdfReport that the admin submits to the
- * Compassion project director. Layout:
- *   - Cover page: Title + audience + period + filters
- *   - Summary 2-column block: totals
- *   - Optional Attendance / Meditation sections (per checkbox)
- *   - Roster table: name | role | Compassion ID | attended | reflections | status
- *
- * Each section honors the include-attendance / include-meditation flags so
- * an admin can produce a "just attendance" or "just meditation" report
- * when that's what the director asked for.
- */
 fun buildComplianceReport(
     data: ComplianceReportData,
     audience: ComplianceAudience,
@@ -52,7 +40,6 @@ fun buildComplianceReport(
 
     val sections = mutableListOf<PdfExporter.PdfBlock>()
 
-    // ---- Summary ---------------------------------------------------------
     sections += PdfExporter.PdfTwoColumn(
         heading = "Summary",
         pairs = listOf(
@@ -63,7 +50,6 @@ fun buildComplianceReport(
         )
     )
 
-    // ---- Roster table (always present so the report is meaningful) -------
     val cols = mutableListOf("Name", "Role", "Compassion #")
     val weights = mutableListOf(2.4f, 1.2f, 1.4f)
     if (includeAttendance) {
@@ -85,7 +71,6 @@ fun buildComplianceReport(
         columnWeights = weights
     )
 
-    // ---- Per-section breakdown (compact key:value lists) -----------------
     if (includeAttendance) {
         sections += PdfExporter.PdfSection(
             heading = "Event Attendance — Per Member",

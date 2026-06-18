@@ -107,7 +107,6 @@ fun LogReflectionOnBehalfScreen(
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(6.dp))
-        // Horizontally scrollable list of week chips — most recent first.
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.meditations, key = { it.id }) { med ->
                 val selected = med.id == state.selectedMeditationId
@@ -131,8 +130,6 @@ fun LogReflectionOnBehalfScreen(
             }
         }
 
-        // Selected meditation preview — gives the leader context for what
-        // they're logging a reflection on.
         val selectedMed = state.meditations.firstOrNull {
             it.id == state.selectedMeditationId
         }

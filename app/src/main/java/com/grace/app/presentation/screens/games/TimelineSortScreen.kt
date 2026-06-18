@@ -397,8 +397,6 @@ private fun FinishedCard(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Show every puzzle's correct order with approx years for
-                // the educational reveal.
                 state.puzzles.forEachIndexed { puzzleIdx, puzzle ->
                     val sorted = puzzle.sortedBy { it.chronologicalOrder }
                     Text(

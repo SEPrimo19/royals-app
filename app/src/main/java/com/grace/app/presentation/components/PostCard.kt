@@ -1,5 +1,6 @@
 package com.grace.app.presentation.components
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,11 +18,17 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -33,6 +40,37 @@ import com.grace.app.presentation.theme.GraceGold
 import com.grace.app.presentation.theme.GraceGreen
 import java.time.Duration
 import java.time.LocalDateTime
+
+@Composable
+private fun ExpandableText(content: String) {
+    var expanded by remember(content) { mutableStateOf(false) }
+    var overflowing by remember(content) { mutableStateOf(false) }
+
+    Column(modifier = Modifier.animateContentSize()) {
+        Text(
+            content,
+            color = GraceCreamDim,
+            fontSize = 15.sp,
+            lineHeight = 24.sp,
+            maxLines = if (expanded) Int.MAX_VALUE else 6,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { result ->
+                if (!expanded) overflowing = result.hasVisualOverflow
+            }
+        )
+        if (overflowing || expanded) {
+            Text(
+                if (expanded) "Read less" else "Read more",
+                color = GraceGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clickable { expanded = !expanded }
+            )
+        }
+    }
+}
 
 private fun ago(t: LocalDateTime): String {
     val d = Duration.between(t, LocalDateTime.now())
@@ -108,7 +146,7 @@ fun PostCard(
 
             if (post.content.isNotBlank()) {
                 Spacer(Modifier.size(10.dp))
-                Text(post.content, color = GraceCreamDim, fontSize = 15.sp, lineHeight = 24.sp)
+                ExpandableText(post.content)
             }
 
             if (post.imageUrl != null) {

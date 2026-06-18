@@ -16,24 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Single source of truth for connectivity.
- *
- * IMPORTANT: We deliberately do NOT require NET_CAPABILITY_VALIDATED for
- * [isOnline]. Android's validation pings clients3.google.com/generate_204
- * to set that capability; on networks where the captive-portal endpoint is
- * slow, blocked (some Filipino ISPs do this), or simply hasn't been hit
- * yet, VALIDATED is false even though the network actually works — the
- * user sees the "!" indicator next to the WiFi icon. Requiring VALIDATED
- * caused every prayer post on those networks to be quarantined to the
- * offline queue with nothing to drain it.
- *
- * The repositories already gracefully fall back to the offline queue when
- * a Supabase write throws, so being optimistic about `isOnline` is safe:
- * worst case a write attempt fails and falls through to the queue, which
- * the worker drains later. Best case (validation was wrong) the write
- * succeeds and the user sees their prayer sync immediately.
- */
 @Singleton
 class NetworkMonitor @Inject constructor(
     @ApplicationContext private val context: Context
@@ -49,16 +31,10 @@ class NetworkMonitor @Inject constructor(
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             _networkState.value = true
-            // Drain immediately when ANY network attaches. The worker is
-            // idempotent and resilient to per-item failures, so attempting
-            // on a not-yet-validated network costs at most one retry burn.
             enqueueOfflineDrain()
         }
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            // Second-chance trigger for networks where VALIDATED arrives
-            // late (slow captive portal, delayed DNS, etc). Same UNIQUE_NAME
-            // means we don't pile up duplicate workers.
             if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             ) {
@@ -90,7 +66,6 @@ class NetworkMonitor @Inject constructor(
     private fun currentlyOnline(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
         val caps = connectivityManager.getNetworkCapabilities(network) ?: return false
-        // INTERNET only — see class-level comment for why VALIDATED is omitted.
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 }

@@ -69,8 +69,6 @@ fun EventQrScreen(
     val scope = rememberCoroutineScope()
     var toast by remember { mutableStateOf<String?>(null) }
     var isExporting by remember { mutableStateOf(false) }
-    // Auto-dismiss toasts so success/error messages don't linger forever.
-    // 2500ms matches the cadence used by other screens in the app.
     if (toast != null) {
         LaunchedEffect(toast) {
             kotlinx.coroutines.delay(2500)
@@ -103,11 +101,6 @@ fun EventQrScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        // While the event row is loading we render a skeleton in the SAME
-        // shape as the final layout (event card + QR slot). Showing a
-        // floating spinner here used to pop visibly during the nav fade —
-        // the skeleton keeps the screen's silhouette stable so the transition
-        // doesn't compete with a content-shift.
         if (state.isLoading && state.event == null) {
             EventQrLoadingSkeleton()
         } else state.event?.let { event ->
@@ -133,12 +126,6 @@ fun EventQrScreen(
 
             Spacer(Modifier.height(16.dp))
             state.qrPayload?.let { payload ->
-                // QR codes MUST be pure black-on-white regardless of app
-                // theme — camera scanners rely on maximum contrast and
-                // hue-shifted variants reduce scan reliability. Don't
-                // refactor these Color.White / Color.Black to palette
-                // tokens; they're a hardware contract, not a theming
-                // choice.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -164,17 +151,10 @@ fun EventQrScreen(
                 color = GraceCreamDim, fontSize = 12.sp
             )
 
-            // Download + Share row. Save writes to Pictures/GRACE so the
-            // creator can print it as a flyer; Share opens the system sheet
-            // (Messenger, Print, email…). QR data is just a deep link, so
-            // a once-saved image works forever.
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.qrPayload?.let { payload ->
                     val title = state.event?.title ?: "Event"
-                    // Encoding + PNG compress + file I/O happens off the main
-                    // thread. Without this, the click freezes the UI long
-                    // enough to trigger the system ANR dialog.
                     ActionPill(
                         label = if (isExporting) "…Working" else "💾 Save to gallery",
                         modifier = Modifier.weight(1f)
@@ -211,9 +191,6 @@ fun EventQrScreen(
                 }
             }
 
-            // Roster PDF — only renders once the attendees query has come
-            // back (otherwise the PDF would be empty). Saves to
-            // Documents/GRACE so the leader can email/print it.
             if (!state.isLoadingAttendees) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -324,13 +301,6 @@ fun EventQrScreen(
                 Text("No one yet — waiting on the first scan.",
                     color = GraceCreamDim, fontSize = 12.sp)
             } else {
-                // Plain Column instead of LazyColumn: nesting a LazyColumn
-                // inside a verticalScroll Column forces Compose to measure
-                // every child eagerly (no virtualization benefit either, since
-                // userScrollEnabled was already false). With many attendees
-                // this could ANR the main thread during composition. Showing
-                // first 8 here keeps the screen scannable; the full list is
-                // exported via the PDF roster button below.
                 Column(modifier = Modifier.fillMaxWidth()) {
                     state.attendees.take(8).forEach { row ->
                         AttendeeRow(row)
@@ -391,9 +361,6 @@ private fun AttendeeRow(row: Attendee) {
 
 @Composable
 private fun EventQrLoadingSkeleton() {
-    // Two stacked placeholders sized to match the real event card + QR slot.
-    // The total height (~ event card 88dp + spacer 16dp + square QR) keeps the
-    // post-load layout from jumping when the real content arrives.
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = GraceCardBg),
@@ -423,10 +390,6 @@ private fun EventQrLoadingSkeleton() {
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(RoundedCornerShape(20.dp))
-            // GraceCream resolves to a light tint on dark bg and a dark
-            // tint on light bg — at 4% alpha it produces a subtle card
-            // placeholder in either palette, where a hardcoded Color.White
-            // would vanish against the cream Light-theme background.
             .background(GraceCream.copy(alpha = 0.04f)),
         contentAlignment = Alignment.Center
     ) {

@@ -16,15 +16,6 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 
-/**
- * Daily local reminder that nudges the user toward the Prayer Wall. Honors
- * the user's per-channel notification toggle so opting out is a single
- * switch in Settings rather than uninstalling the worker.
- *
- * Fires from a PeriodicWorkRequest scheduled by ReminderScheduler — the
- * worker itself only builds the notification, no scheduling logic lives
- * here.
- */
 @HiltWorker
 class PrayerReminderWorker @AssistedInject constructor(
     @Assisted private val appContext: Context,
@@ -63,8 +54,6 @@ class PrayerReminderWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_NAME = "grace_prayer_reminder"
-        // Stable id so a new fire replaces the previous one in the tray
-        // instead of stacking up a dozen identical reminders.
         const val UNIQUE_NOTIF_ID = 0x9700
     }
 }

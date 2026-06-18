@@ -126,7 +126,6 @@ private fun Grid(
     state: MemoryMatchUiState,
     onCardTapped: (Int) -> Unit
 ) {
-    // 3 columns × 4 rows = 12 cards. Aspect ratio keeps cards readable.
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -149,11 +148,6 @@ private fun Grid(
     }
 }
 
-/**
- * Card flip — animates rotationY 0° (face-down) ↔ 180° (face-up). We swap
- * the displayed text once the rotation crosses 90° so we don't see the
- * back-face content during the second half of the spin.
- */
 @Composable
 private fun FlipCard(
     card: MemoryCard,
@@ -168,8 +162,6 @@ private fun FlipCard(
     )
     val showFront = rotation > 90f
 
-    // Color treatment: matched cards stay green-tinted; face-down cards
-    // show the GraceCardAlt back; face-up unmatched cards use GraceCardBg.
     val bg = when {
         isMatched -> GraceGreen.copy(alpha = 0.22f)
         showFront -> GraceCardBg
@@ -187,8 +179,6 @@ private fun FlipCard(
             .aspectRatio(0.78f)
             .graphicsLayer {
                 rotationY = rotation
-                // Camera distance helps the flip look like a real card,
-                // not a flat scale. 12*density is the Compose recipe.
                 cameraDistance = 12f * density
             }
             .clickable(enabled = !isFaceUp && !isMatched) { onTap() },
@@ -203,8 +193,6 @@ private fun FlipCard(
             contentAlignment = Alignment.Center
         ) {
             if (showFront) {
-                // The face-up content has to be counter-rotated 180° on Y
-                // so the text reads correctly to the user.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -233,9 +221,6 @@ private fun FlipCard(
                     }
                 }
             } else {
-                // Card back: stylized "📖" + ROYALS wordmark. App-facing
-                // brand is Royals; internal package/class names stay GRACE
-                // per the brand-names memory.
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("📖", fontSize = 24.sp)
                     Text(
@@ -244,11 +229,10 @@ private fun FlipCard(
                     )
                 }
             }
-            // Border via a colored frame inside the card shape.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(border.copy(alpha = 0.0f)) // placeholder; border drawn by Card shape via tint
+                    .background(border.copy(alpha = 0.0f))
             )
         }
     }
@@ -290,7 +274,6 @@ private fun CompletedCard(
                 color = GraceCreamDim, fontSize = 12.sp
             )
 
-            // Mini-reveal: show all the matched verses for the round.
             Spacer(Modifier.height(18.dp))
             Text(
                 "PAIRS THIS ROUND", color = GraceCreamDim, fontSize = 10.sp,

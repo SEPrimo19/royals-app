@@ -197,7 +197,6 @@ private fun JournalRow(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column(modifier = Modifier.padding(top = 12.dp)) {
-                // Verse text
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -252,8 +251,9 @@ private fun SectionLabel(text: String) {
     Spacer(Modifier.height(4.dp))
 }
 
-private val dateFormatter = DateTimeFormatter
-    .ofPattern("EEEE · MMM d, yyyy", Locale.getDefault())
-
-private fun formatDate(date: LocalDate): String =
-    date.format(dateFormatter).uppercase(Locale.getDefault())
+private fun formatDate(date: LocalDate): String {
+    val locale = Locale.getDefault()
+    return date
+        .format(DateTimeFormatter.ofPattern("EEEE · MMM d, yyyy", locale))
+        .uppercase(locale)
+}

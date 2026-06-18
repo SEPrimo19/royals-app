@@ -36,9 +36,6 @@ class UpdateMyProfileUseCase @Inject constructor(
             )
         }
 
-        // Compassion participants MUST have a complete 4-digit ID; otherwise
-        // the DB CHECK constraint would reject the row anyway, so we fail
-        // fast here with a friendlier message.
         val cleanedDigits = compassionDigits.filter { it.isDigit() }
         if (isCompassion && cleanedDigits.length != 4) {
             return Result.Error(
@@ -48,9 +45,6 @@ class UpdateMyProfileUseCase @Inject constructor(
         val composedCompassionNumber = if (isCompassion)
             "PH867-$cleanedDigits" else null
 
-        // birthdate + sex are required for Compassion participants — the
-        // compliance reports need age cohort + sex breakdowns. Non-Compassion
-        // users can leave them blank; the data is still useful but optional.
         if (isCompassion) {
             if (birthdate == null) {
                 return Result.Error("Birthdate is required for Compassion participants.")
@@ -59,7 +53,6 @@ class UpdateMyProfileUseCase @Inject constructor(
                 return Result.Error("Please pick a sex (M or F) for Compassion participants.")
             }
         }
-        // Date sanity (applies even when optional).
         if (birthdate != null) {
             val today = java.time.LocalDate.now()
             if (birthdate.isAfter(today)) {
@@ -76,7 +69,6 @@ class UpdateMyProfileUseCase @Inject constructor(
             name = trimmedName,
             bio = cleanedBio,
             messengerUrl = cleanedMessenger,
-            // If no URL is set, force public=false so we don't show a phantom toggle state.
             messengerPublic = if (cleanedMessenger == null) false else messengerPublic,
             isCompassion = isCompassion,
             compassionNumber = composedCompassionNumber,
@@ -86,10 +78,6 @@ class UpdateMyProfileUseCase @Inject constructor(
         )
     }
 
-    /**
-     * Whitelist of allowed hosts. Anything else is rejected to prevent the
-     * profile field becoming a generic link vector inside a youth ministry.
-     */
     private fun isMessengerUrl(raw: String): Boolean {
         val pattern = Regex(
             "^https?://(www\\.)?(m\\.me|messenger\\.com|facebook\\.com|fb\\.me)/.+",

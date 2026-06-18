@@ -9,6 +9,7 @@ import com.grace.app.data.remote.supabase.dto.GameUserStatsDto
 import com.grace.app.data.remote.supabase.dto.LeaderboardEntryDto
 import com.grace.app.data.remote.supabase.dto.MemoryCardPairDto
 import com.grace.app.data.remote.supabase.dto.MonthlyLeaderboardEntryDto
+import com.grace.app.data.remote.supabase.dto.TeamLeaderboardEntryDto
 import com.grace.app.domain.model.BibleCharacter
 import com.grace.app.domain.model.BibleEvent
 import com.grace.app.domain.model.BiblePassage
@@ -96,7 +97,7 @@ fun LeaderboardEntryDto.toDomain(currentUserId: String?): LeaderboardEntry =
         userId = userId,
         userName = userName,
         groupId = groupId,
-        groupName = null,  // weekly board is always within-group; chip not needed
+        groupName = null,
         points = weekPoints,
         attempts = weekAttempts,
         isMe = userId == currentUserId
@@ -111,4 +112,15 @@ fun MonthlyLeaderboardEntryDto.toDomain(currentUserId: String?): LeaderboardEntr
         points = monthPoints,
         attempts = monthAttempts,
         isMe = userId == currentUserId
+    )
+
+fun TeamLeaderboardEntryDto.toDomain(myGroupId: String?): LeaderboardEntry =
+    LeaderboardEntry(
+        userId = groupId,
+        userName = groupName,
+        groupId = groupId,
+        groupName = null,
+        points = monthPoints,
+        attempts = memberCount,
+        isMe = groupId == myGroupId
     )

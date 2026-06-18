@@ -11,10 +11,16 @@ import com.grace.app.domain.model.Group
 import com.grace.app.domain.model.LifeGroupDetail
 import com.grace.app.domain.repository.LifeGroupRepository
 import com.grace.app.domain.util.Result
+import com.grace.app.data.remote.supabase.dto.BrowsableGroupRow
+import com.grace.app.data.remote.supabase.dto.GroupJoinRequestInsertDto
+import com.grace.app.data.remote.supabase.dto.IncomingJoinRequestRow
+import com.grace.app.data.remote.supabase.dto.toDomain
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,8 +40,6 @@ class LifeGroupRepositoryImpl @Inject constructor(
             val uid = currentUid()
                 ?: return Result.Error("Your session expired. Please sign in again.")
 
-            // Primary lookup: group_members. Falls back to the legacy
-            // users.group_id (set by ProfileSetup before Life Groups existed).
             val groupId = supabase.from("group_members")
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<GroupMemberDto>()
@@ -87,24 +91,15 @@ class LifeGroupRepositoryImpl @Inject constructor(
             val uid = currentUid()
                 ?: return Result.Error("Your session expired. Please sign in again.")
 
-            // Insert + decodeSingle pattern: server returns the canonical row
-            // with its real UUID — avoids the optimistic-temp-id duplication
-            // bug we hit in earlier features. Use GroupInsertDto (no id field)
-            // so Postgres uses DEFAULT uuid_generate_v4(); sending id = ""
-            // causes "invalid input syntax for type uuid" and a misleading
-            // "Couldn't reach the server" surfacing in the UI.
             val created = supabase.from("groups")
                 .insert(
                     GroupInsertDto(name = name, leaderId = uid, description = description)
                 ) { select() }
                 .decodeSingle<GroupDto>()
 
-            // Self-insert into group_members so the leader appears in the roster.
             supabase.from("group_members")
                 .insert(GroupMemberDto(userId = uid, groupId = created.id))
 
-            // Mirror to users.group_id so existing screens (HomeScreen's
-            // "My Leader" card, ProfileSetup display) stay consistent.
             runCatching {
                 supabase.from("users").update({ set("group_id", created.id) }) {
                     filter { eq("id", uid) }
@@ -149,8 +144,6 @@ class LifeGroupRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to add members.")
         }
         return try {
-            // Idempotent: skip if already a member (search excludes them but
-            // race conditions or stale-cache calls could still hit this).
             val existing = supabase.from("group_members")
                 .select {
                     filter {
@@ -164,12 +157,6 @@ class LifeGroupRepositoryImpl @Inject constructor(
             }
             supabase.from("group_members")
                 .insert(GroupMemberDto(userId = userId, groupId = groupId))
-            // Mirror to users.group_id so the Bible Games leaderboard RPC
-            // (and any legacy screens that still read users.group_id) see
-            // the membership. Without this, members appear in the Life
-            // Group roster but get an empty leaderboard. The member's
-            // device picks up the new group_id on next syncProfileFromServer
-            // (cold start) — no sign-out required.
             runCatching {
                 supabase.from("users").update({ set("group_id", groupId) }) {
                     filter { eq("id", userId) }
@@ -190,20 +177,16 @@ class LifeGroupRepositoryImpl @Inject constructor(
         val q = query.trim()
         if (q.length < 2) return Result.Success(emptyList())
         return try {
-            // Pull a small candidate pool of plain members matching name OR
-            // email, then exclude anyone already in a Life Group with a
-            // second batched lookup. Two queries because Postgrest doesn't
-            // expose a NOT IN subquery — but both are tiny + indexed.
             val candidates = supabase.from("users")
                 .select {
                     filter {
-                        eq("role", "member")
+                        isIn("role", listOf("member", "council"))
                         or {
                             ilike("name", "%$q%")
                             ilike("email", "%$q%")
                         }
                     }
-                    limit(25) // a few extra so the post-filter still hits 10
+                    limit(25)
                 }
                 .decodeList<UserDto>()
             if (candidates.isEmpty()) return Result.Success(emptyList())
@@ -216,7 +199,7 @@ class LifeGroupRepositoryImpl @Inject constructor(
                 .toSet()
 
             val filtered = candidates
-                .filter { it.id !in alreadyInAGroup }
+                .filter { it.id !in alreadyInAGroup || it.role == "council" }
                 .map { it.toDomain() }
                 .take(10)
             Result.Success(filtered)
@@ -232,9 +215,6 @@ class LifeGroupRepositoryImpl @Inject constructor(
             return Result.Error("You're offline. Connect to browse members.")
         }
         return try {
-            // Same shape as searchInvitableUsers but without the name/email
-            // ilike — pull a candidate pool of plain members, exclude
-            // anyone already in a group via a batched group_members lookup.
             val candidates = supabase.from("users")
                 .select {
                     filter { eq("role", "member") }
@@ -252,9 +232,25 @@ class LifeGroupRepositoryImpl @Inject constructor(
                 .toSet()
 
             val filtered = candidates
-                .filter { it.id !in alreadyInAGroup }
+                .filter { it.id !in alreadyInAGroup || it.role == "council" }
                 .map { it.toDomain() }
             Result.Success(filtered)
+        } catch (e: Exception) {
+            Result.Error(friendly(e), e)
+        }
+    }
+
+    override suspend fun deleteLifeGroup(groupId: String): Result<Unit> {
+        if (!networkMonitor.isOnline) {
+            return Result.Error("You're offline. Connect to delete this Life Group.")
+        }
+        return try {
+            supabase.from("groups").delete { filter { eq("id", groupId) } }
+            prefs.setRoleAndGroup(
+                role = prefs.userRole.first() ?: "member",
+                groupId = null
+            )
+            Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(friendly(e), e)
         }
@@ -271,19 +267,164 @@ class LifeGroupRepositoryImpl @Inject constructor(
                     eq("user_id", userId)
                 }
             }
-            // If a user removed themselves, clear their cached group_id too.
             val uid = currentUid()
             if (uid == userId) {
                 runCatching {
-                    // Explicit String? — bare `null` triggers overload ambiguity.
                     supabase.from("users").update({ set("group_id", null as String?) }) {
                         filter { eq("id", uid) }
                     }
                 }
+                prefs.setRoleAndGroup(
+                    role = prefs.userRole.first() ?: "member",
+                    groupId = null
+                )
             }
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(friendly(e), e)
+        }
+    }
+
+
+    override suspend fun listBrowsableGroups(): com.grace.app.domain.util.Result<
+        List<com.grace.app.domain.model.BrowsableGroup>
+    > {
+        if (!networkMonitor.isOnline) {
+            return com.grace.app.domain.util.Result.Error(
+                "You're offline. Connect to browse cells."
+            )
+        }
+        return try {
+            val rows = supabase
+                .pluginManager
+                .getPlugin(Postgrest)
+                .rpc(function = "list_browsable_groups")
+                .decodeList<BrowsableGroupRow>()
+            com.grace.app.domain.util.Result.Success(rows.map { it.toDomain() })
+        } catch (e: Exception) {
+            com.grace.app.domain.util.Result.Error(friendlyJoin(e), e)
+        }
+    }
+
+    override suspend fun requestToJoinGroup(
+        groupId: String
+    ): com.grace.app.domain.util.Result<Unit> {
+        if (!networkMonitor.isOnline) {
+            return com.grace.app.domain.util.Result.Error(
+                "You're offline. Connect to send the request."
+            )
+        }
+        return try {
+            val uid = currentUid()
+                ?: return com.grace.app.domain.util.Result.Error(
+                    "Your session expired. Please sign in again."
+                )
+            supabase.from("group_join_requests").insert(
+                GroupJoinRequestInsertDto(groupId = groupId, userId = uid)
+            )
+            com.grace.app.domain.util.Result.Success(Unit)
+        } catch (e: Exception) {
+            com.grace.app.domain.util.Result.Error(friendlyJoin(e), e)
+        }
+    }
+
+    override suspend fun cancelMyJoinRequest(
+        requestId: String
+    ): com.grace.app.domain.util.Result<Unit> {
+        if (!networkMonitor.isOnline) {
+            return com.grace.app.domain.util.Result.Error(
+                "You're offline. Connect to cancel."
+            )
+        }
+        return try {
+            supabase.from("group_join_requests").update(
+                {
+                    set("status", "cancelled")
+                }
+            ) {
+                filter { eq("id", requestId) }
+            }
+            com.grace.app.domain.util.Result.Success(Unit)
+        } catch (e: Exception) {
+            com.grace.app.domain.util.Result.Error(friendlyJoin(e), e)
+        }
+    }
+
+    override suspend fun listIncomingJoinRequests(): com.grace.app.domain.util.Result<
+        List<com.grace.app.domain.model.IncomingJoinRequest>
+    > {
+        if (!networkMonitor.isOnline) {
+            return com.grace.app.domain.util.Result.Error(
+                "You're offline. Connect to load join requests."
+            )
+        }
+        return try {
+            val rows = supabase
+                .pluginManager
+                .getPlugin(Postgrest)
+                .rpc(function = "list_incoming_join_requests")
+                .decodeList<IncomingJoinRequestRow>()
+            com.grace.app.domain.util.Result.Success(rows.map { it.toDomain() })
+        } catch (e: Exception) {
+            com.grace.app.domain.util.Result.Error(friendlyJoin(e), e)
+        }
+    }
+
+    override suspend fun approveJoinRequest(
+        requestId: String
+    ): com.grace.app.domain.util.Result<Unit> = decideOnRequest(requestId, "approved", null)
+
+    override suspend fun rejectJoinRequest(
+        requestId: String,
+        note: String?
+    ): com.grace.app.domain.util.Result<Unit> = decideOnRequest(requestId, "rejected", note)
+
+    private suspend fun decideOnRequest(
+        requestId: String,
+        newStatus: String,
+        note: String?
+    ): com.grace.app.domain.util.Result<Unit> {
+        if (!networkMonitor.isOnline) {
+            return com.grace.app.domain.util.Result.Error(
+                "You're offline. Connect to decide on requests."
+            )
+        }
+        return try {
+            val uid = currentUid()
+                ?: return com.grace.app.domain.util.Result.Error(
+                    "Your session expired. Please sign in again."
+                )
+            supabase.from("group_join_requests").update(
+                {
+                    set("status", newStatus)
+                    set("decided_by", uid)
+                    if (!note.isNullOrBlank()) {
+                        set("decided_note", note.trim().take(280))
+                    }
+                }
+            ) {
+                filter { eq("id", requestId) }
+            }
+            com.grace.app.domain.util.Result.Success(Unit)
+        } catch (e: Exception) {
+            com.grace.app.domain.util.Result.Error(friendlyJoin(e), e)
+        }
+    }
+
+    private fun friendlyJoin(e: Exception): String {
+        val raw = e.message.orEmpty()
+        return when {
+            raw.contains("3 pending requests", true) ->
+                "You already have 3 pending join requests. Cancel one first."
+            raw.contains("once per 24 hours", true) ->
+                "You already requested this cell in the last 24 hours."
+            raw.contains("recently declined", true) ->
+                "This cell recently declined your request. Try again after 7 days."
+            raw.contains("row-level security", true) ->
+                "You don't have permission to do that."
+            raw.contains("duplicate key", true) || raw.contains("23505") ->
+                "You already have a pending request for this cell."
+            else -> "Couldn't complete the request. Try again."
         }
     }
 

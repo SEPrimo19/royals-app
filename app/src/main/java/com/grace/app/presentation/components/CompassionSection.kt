@@ -31,16 +31,6 @@ import com.grace.app.presentation.theme.GraceCreamDim
 import com.grace.app.presentation.theme.GraceDeepBlue
 import com.grace.app.presentation.theme.GraceGold
 
-/**
- * Compassion sponsor block — shared by ProfileSetupScreen (initial signup)
- * and EditProfileScreen (post-signup edits). The PH867- prefix is locked
- * because every Royals Compassion member shares this prefix; the user only
- * enters the 4-digit suffix and we compose the full ID server-side.
- *
- * Inputs are pure state; the parent owns the truth and validates on submit.
- *
- * @param digits the 4-digit suffix only (NOT the composed PH867-XXXX)
- */
 @Composable
 fun CompassionSection(
     isCompassion: Boolean,

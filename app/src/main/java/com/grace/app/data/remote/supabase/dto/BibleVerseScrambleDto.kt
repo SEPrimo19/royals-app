@@ -3,7 +3,6 @@ package com.grace.app.data.remote.supabase.dto
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** Row shape for `bible_verse_scrambles`. */
 @Serializable
 data class BibleVerseScrambleDto(
     @SerialName("id") val id: String,

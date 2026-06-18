@@ -23,7 +23,7 @@ import javax.inject.Inject
 data class LeaderUiState(
     val myLeader: User? = null,
     val allLeaders: List<User> = emptyList(),
-    val checkInStep: Int = 0, // 0..2
+    val checkInStep: Int = 0,
     val checkInAnswers: List<String> = listOf("", "", ""),
     val checkInDone: Boolean = false,
     val isSubmittingCheckIn: Boolean = false,
@@ -70,12 +70,6 @@ class LeaderViewModel @Inject constructor(
 
     init { refresh() }
 
-    /**
-     * Re-fetch leaders + check-in status. The bottom-bar saveState/restoreState
-     * keeps this VM alive across tab switches, so init only fires once; without
-     * a refresh-on-entry hook a new leader (or a check-in done from another
-     * device) wouldn't show until the user kills + reopens the app.
-     */
     fun refresh() {
         myLeaderJob?.cancel()
         myLeaderJob = viewModelScope.launch {
@@ -96,11 +90,6 @@ class LeaderViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            // Pre-fill the form with this week's existing submission (if any)
-            // so the user can edit until Monday rolls over. checkInDone here
-            // means "the user has SOMETHING saved for this week" — the form
-            // stays visible so they can update it. Submit button text in the
-            // UI flips to "Update Check-In" when this is true.
             val existing = (leaderRepository.getCurrentWeekCheckIn()
                 as? Result.Success)?.data
             if (existing != null) {
@@ -139,7 +128,6 @@ class LeaderViewModel @Inject constructor(
     private fun submit() {
         val s = _uiState.value
         if (s.isSubmittingCheckIn) return
-        // Defense-in-depth: UI also disables Submit, but never trust the UI alone.
         if (s.checkInAnswers.any { it.isBlank() }) {
             _uiState.update {
                 it.copy(error = "Please answer all three questions before submitting.")

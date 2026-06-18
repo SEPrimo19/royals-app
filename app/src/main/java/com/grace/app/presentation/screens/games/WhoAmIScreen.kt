@@ -1,8 +1,8 @@
 package com.grace.app.presentation.screens.games
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,7 +70,6 @@ fun WhoAmIScreen(
             livesRemaining = state.livesRemaining,
             onExit = onExit
         )
-        // Lifelines — Daniel only (Who Am I? has no timer for Joshua).
         if (!state.isFinished && state.currentCharacter != null) {
             Spacer(Modifier.height(10.dp))
             LifelinesBar(
@@ -79,7 +78,7 @@ fun WhoAmIScreen(
                 joshuaActiveThisQ = false,
                 danielUsedThisQ = state.eliminatedIndices.isNotEmpty(),
                 lifelineError = state.lifelineError,
-                onUseJoshua = { /* no-op */ },
+                onUseJoshua = {   },
                 onUseDaniel = viewModel::useDaniel,
                 onDismissError = viewModel::dismissLifelineError
             )
@@ -129,7 +128,6 @@ private fun Header(
                 color = GraceCreamDim, fontSize = 11.sp
             )
         }
-        // Hearts row — matches Trivia Practice. Lost hearts dim to muted.
         Row(verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until MAX_LIVES_WAI) {
                 val active = i < livesRemaining
@@ -143,10 +141,6 @@ private fun Header(
     }
 }
 
-/**
- * Run-over screen: shown when livesRemaining hits 0. Mirrors Trivia
- * Practice's finish UX so users coming from there feel at home.
- */
 @Composable
 private fun FinishedCard(
     totalPoints: Int,
@@ -213,7 +207,6 @@ private fun RoundBody(
     DifficultyChip(ch.difficulty)
     Spacer(Modifier.height(10.dp))
 
-    // Header strip: clue counter + attempts-left badge.
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             "CLUE ${state.cluesRevealed} OF 4",
@@ -227,7 +220,6 @@ private fun RoundBody(
     }
     Spacer(Modifier.height(10.dp))
 
-    // The peeled clues — render one card per revealed clue.
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (i in 0 until state.cluesRevealed) {
             ClueCard(index = i + 1, text = ch.clues[i])
@@ -236,7 +228,6 @@ private fun RoundBody(
 
     Spacer(Modifier.height(14.dp))
 
-    // "Next Clue" — only when not answered AND more clues to peel.
     if (!state.hasAnswered && state.cluesRevealed < 4) {
         OutlinedButton(
             onClick = onPeelClue,
@@ -250,7 +241,6 @@ private fun RoundBody(
         Spacer(Modifier.height(14.dp))
     }
 
-    // MCQ options.
     Text(
         "WHO AM I?", color = GraceCreamDim, fontSize = 10.sp,
         letterSpacing = 2.sp, fontWeight = FontWeight.Bold
@@ -267,11 +257,10 @@ private fun RoundBody(
         Spacer(Modifier.height(10.dp))
     }
 
-    // Reveal card after a final answer (correct or out of attempts).
     AnimatedVisibility(
         visible = state.hasAnswered,
         enter = fadeIn(),
-        exit = fadeOut()
+        exit = ExitTransition.None
     ) {
         Column {
             Spacer(Modifier.height(8.dp))
@@ -352,7 +341,6 @@ private fun OptionRow(
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Letter chip A/B/C/D.
         Box(
             modifier = Modifier
                 .size(28.dp)
@@ -405,8 +393,6 @@ private fun RevealCard(character: BibleCharacter, state: WhoAmIUiState) {
                     fontSize = 13.sp, fontWeight = FontWeight.Bold
                 )
             }
-            // Always show the answer name so wrong-guess players walk away
-            // knowing who it was.
             Spacer(Modifier.height(10.dp))
             Text(
                 "ANSWER", color = GraceCreamDim, fontSize = 10.sp,
@@ -474,12 +460,6 @@ private fun ErrorCard(message: String) {
     }
 }
 
-/**
- * Local difficulty chip — keeps WhoAmI's "tier" tag self-contained.
- * Different score labels than Trivia's chip (Who Am I? scores 40/25/15/5
- * by clues used, not 10/20/30 by difficulty), so we can't reuse Trivia's
- * version directly.
- */
 @Composable
 private fun DifficultyChip(d: com.grace.app.domain.model.GameDifficulty) {
     val (label, accent) = when (d) {

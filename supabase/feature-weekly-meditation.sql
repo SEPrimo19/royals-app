@@ -1,22 +1,4 @@
--- =============================================================================
--- Royals: The Kingdom Builders — Weekly Meditation
---
--- Two new tables:
---   weekly_meditations        — admin-curated content (verse + reflection prompt)
---   user_meditation_submissions — what each user wrote in response
---
--- Privacy model (DIFFERENT from devotional journal which is encrypted/private):
---   A user's submission is visible to:
---     - the user themselves (always)
---     - their OWN cell leader (match via users.group_id)
---     - youth_president / pastor / admin (full visibility)
---   The UI must show a prominent "Your cell leader will see this" badge so
---   users don't conflate this with the encrypted private journal.
---
--- Safe to re-run. Seed inserts use ON CONFLICT DO NOTHING.
--- =============================================================================
 
--- ---- weekly_meditations -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS weekly_meditations (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   week_number           INTEGER NOT NULL,
@@ -35,11 +17,9 @@ CREATE TABLE IF NOT EXISTS weekly_meditations (
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Date-range lookup is the hot path: "what's the meditation for THIS week?"
 CREATE INDEX IF NOT EXISTS idx_weekly_meditations_dates
   ON weekly_meditations (start_date, end_date) WHERE is_active = TRUE;
 
--- Unique week+year combo so a duplicate seed doesn't double-insert.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_meditations_week_year
   ON weekly_meditations (week_number, EXTRACT(YEAR FROM start_date));
 
@@ -50,11 +30,9 @@ DROP POLICY IF EXISTS "meditation_insert" ON weekly_meditations;
 DROP POLICY IF EXISTS "meditation_update" ON weekly_meditations;
 DROP POLICY IF EXISTS "meditation_delete" ON weekly_meditations;
 
--- Every authenticated user can read meditations.
 CREATE POLICY "meditation_select" ON weekly_meditations
   FOR SELECT USING (auth.role() = 'authenticated');
 
--- Only senior roles can curate content.
 CREATE POLICY "meditation_insert" ON weekly_meditations
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -83,7 +61,6 @@ CREATE POLICY "meditation_delete" ON weekly_meditations
   );
 
 
--- ---- user_meditation_submissions -------------------------------------------
 CREATE TABLE IF NOT EXISTS user_meditation_submissions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -91,7 +68,7 @@ CREATE TABLE IF NOT EXISTS user_meditation_submissions (
   reflection_text TEXT NOT NULL CHECK (length(reflection_text) > 0),
   submitted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, meditation_id)  -- one submission per user per week
+  UNIQUE (user_id, meditation_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_meditation_subs_user
@@ -106,11 +83,6 @@ DROP POLICY IF EXISTS "meditation_sub_insert" ON user_meditation_submissions;
 DROP POLICY IF EXISTS "meditation_sub_update" ON user_meditation_submissions;
 DROP POLICY IF EXISTS "meditation_sub_delete" ON user_meditation_submissions;
 
--- Visibility per the user's spec:
---   - own row                                  → always
---   - own cell leader (group_id match)          → SELECT only
---   - youth_president / pastor / admin          → SELECT all
--- The group_id match scopes leader visibility to ONLY their own cell members.
 CREATE POLICY "meditation_sub_select" ON user_meditation_submissions
   FOR SELECT USING (
     auth.uid() = user_id
@@ -119,9 +91,7 @@ CREATE POLICY "meditation_sub_select" ON user_meditation_submissions
       JOIN users target ON target.id = user_meditation_submissions.user_id
       WHERE me.id = auth.uid()
         AND (
-          -- Senior leaders see everything.
           me.role IN ('youth_president','pastor','admin')
-          -- Cell leader sees their group only — group_id must match AND be non-null.
           OR (me.role = 'cell_leader'
               AND me.group_id IS NOT NULL
               AND me.group_id = target.group_id)
@@ -129,7 +99,6 @@ CREATE POLICY "meditation_sub_select" ON user_meditation_submissions
     )
   );
 
--- Only the user themselves can write their own reflection.
 CREATE POLICY "meditation_sub_insert" ON user_meditation_submissions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
@@ -139,8 +108,6 @@ CREATE POLICY "meditation_sub_update" ON user_meditation_submissions
 CREATE POLICY "meditation_sub_delete" ON user_meditation_submissions
   FOR DELETE USING (auth.uid() = user_id);
 
--- updated_at maintenance — bump on UPDATE so a future "edited" indicator
--- can render the right timestamp.
 CREATE OR REPLACE FUNCTION touch_meditation_submission_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -156,9 +123,6 @@ CREATE TRIGGER trg_meditation_sub_updated_at
   FOR EACH ROW EXECUTE FUNCTION touch_meditation_submission_updated_at();
 
 
--- ---- Seed: 30 weeks from Royals_Kingdom_Builders_Meditation_Plan_2026.pdf --
--- ON CONFLICT DO NOTHING means re-running this file is safe — week+year is
--- the unique key, so the same week never inserts twice.
 INSERT INTO weekly_meditations
   (week_number, start_date, end_date, theme, title, scripture_ref,
    scripture_text, reflection_prompt, further_reading_label,

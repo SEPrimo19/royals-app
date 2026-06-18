@@ -1,23 +1,5 @@
--- =============================================================================
--- GRACE — Bible Games v2 schema upgrade
---
--- Two changes:
---
--- 1. Split Daily Challenge by difficulty: Easy / Medium / Hard. Each is its
---    own 10-question round, each unlocks independently per day. Streak fires
---    when the user completes *any* difficulty in the day — players aren't
---    forced to attempt Hard daily to keep their fire alive.
---
--- 2. Bulk-load ~25 more curated NKJV trivia questions so 10/category/day is
---    actually playable. Pre-Phase-5 floor; leader curation builds from here.
---
--- Safe to re-run.
--- =============================================================================
 
--- ---- COLUMNS: per-difficulty completion timestamps -------------------------
--- last_daily_challenge_at (legacy single column from v1) is kept but no
--- longer written by the client. Drop it in a follow-up after a few weeks
--- once we're sure nothing reads it.
+
 ALTER TABLE game_user_stats
   ADD COLUMN IF NOT EXISTS last_daily_easy_at   TIMESTAMPTZ;
 ALTER TABLE game_user_stats
@@ -25,9 +7,7 @@ ALTER TABLE game_user_stats
 ALTER TABLE game_user_stats
   ADD COLUMN IF NOT EXISTS last_daily_hard_at   TIMESTAMPTZ;
 
--- ---- EXTRA SEED: ~25 questions to make 10/category/day playable -----------
 INSERT INTO bible_questions (category, difficulty, question, options, correct_index, source_ref) VALUES
--- Easy (Old Testament + New Testament + Character)
 ('old_testament','easy','Who built the first temple in Jerusalem?',
  '["David","Solomon","Hezekiah","Josiah"]'::jsonb,1,'1 Kings 6'),
 ('old_testament','easy','Who was Adam''s wife?',
@@ -47,7 +27,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
 ('character','easy','Who was the father of Isaac?',
  '["Adam","Noah","Abraham","Jacob"]'::jsonb,2,'Genesis 21:3'),
 
--- Medium
 ('old_testament','medium','How many plagues did God send on Egypt?',
  '["Seven","Eight","Nine","Ten"]'::jsonb,3,'Exodus 7-12'),
 ('old_testament','medium','Who was sold into slavery by his brothers?',
@@ -65,7 +44,6 @@ INSERT INTO bible_questions (category, difficulty, question, options, correct_in
 ('character','medium','Which woman became David''s great-grandmother through marriage to Boaz?',
  '["Hannah","Naomi","Ruth","Bathsheba"]'::jsonb,2,'Ruth 4:13-22'),
 
--- Hard
 ('old_testament','hard','How many books are in the Old Testament?',
  '["27","36","39","46"]'::jsonb,2,'Canon'),
 ('old_testament','hard','How old was Moses when he died?',

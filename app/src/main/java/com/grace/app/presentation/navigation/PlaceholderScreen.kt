@@ -14,8 +14,6 @@ import androidx.compose.ui.unit.dp
 import com.grace.app.presentation.theme.GraceCreamDim
 import com.grace.app.presentation.theme.GraceGold
 
-// Temporary scaffolding so navigation + bottom bar are testable in Prompt 1.
-// Each real screen replaces its placeholder in the prompt that owns it.
 @Composable
 fun PlaceholderScreen(title: String, builtIn: String) {
     Column(

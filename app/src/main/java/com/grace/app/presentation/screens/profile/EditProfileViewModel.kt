@@ -18,28 +18,19 @@ import javax.inject.Inject
 
 data class EditProfileUiState(
     val name: String = "",
-    val email: String = "",            // read-only display
+    val email: String = "",
     val bio: String = "",
     val messengerUrl: String = "",
     val messengerPublic: Boolean = false,
-    // Compassion participant fields. compassionDigits is the 4-digit suffix
-    // only; the PH867- prefix is composed in the use case.
     val isCompassion: Boolean = false,
     val compassionDigits: String = "",
     val emergencyContact: String = "",
-    // Birthdate + sex — same fields collected on AddProxyMember/ProfileSetup
-    // so app users and proxy-only members share the same data model.
     val birthdate: java.time.LocalDate? = null,
     val sex: String = "",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val error: String? = null
 ) {
-    /**
-     * Save enabled when: name is valid AND (not Compassion OR full set is
-     * provided). Compassion users must have 4 digits + birthdate + sex —
-     * matches the AddProxyMember + ProfileSetup contract.
-     */
     val canSave: Boolean
         get() = name.trim().length >= 2 &&
             (!isCompassion || (
@@ -91,10 +82,6 @@ class EditProfileViewModel @Inject constructor(
             when (val r = getMyProfileUseCase()) {
                 is Result.Success -> {
                     val u = r.data
-                    // Split the server's full PH867-XXXX back into the 4-digit
-                    // suffix the UI edits. removePrefix is safe even if the
-                    // value is missing or doesn't match — returns the whole
-                    // string, which is then trimmed to 4 digits.
                     val savedDigits = (u?.compassionNumber ?: "")
                         .removePrefix("PH867-")
                         .filter { it.isDigit() }
@@ -127,7 +114,6 @@ class EditProfileViewModel @Inject constructor(
             is EditProfileEvent.NameChanged ->
                 _uiState.update { it.copy(name = event.value) }
             is EditProfileEvent.BioChanged ->
-                // Cap at 280 chars in UI so the validator doesn't have to.
                 _uiState.update { it.copy(bio = event.value.take(280)) }
             is EditProfileEvent.MessengerChanged ->
                 _uiState.update { it.copy(messengerUrl = event.value) }
@@ -135,9 +121,6 @@ class EditProfileViewModel @Inject constructor(
                 _uiState.update { it.copy(messengerPublic = event.value) }
             is EditProfileEvent.CompassionToggled ->
                 _uiState.update {
-                    // Same toggle-off discipline as signup — clear digits so
-                    // a re-toggle starts clean and we don't accidentally save
-                    // a stale partial ID.
                     it.copy(
                         isCompassion = event.on,
                         compassionDigits = if (event.on) it.compassionDigits else ""

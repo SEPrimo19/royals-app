@@ -166,12 +166,10 @@ fun EventCheckInScreen(
 
     if (state.isDone) {
         Box(modifier = Modifier.fillMaxWidth().height(0.dp)) {
-            // No-op; placeholder for future Lottie confetti animation.
         }
     }
 }
 
-// "23 min" up to an hour; "1h 12m" past that. Server gives whole minutes.
 private fun formatLate(minutes: Int): String {
     if (minutes < 60) return "$minutes min"
     val hours = minutes / 60

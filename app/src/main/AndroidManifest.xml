@@ -7,8 +7,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <!-- Save QR images to the public Pictures dir on pre-Q. Scoped to <= 28
-         because MediaStore on Q+ doesn't need this permission. -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -34,24 +32,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep links (grace://app/...) wired in Prompt 7. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="grace" android:host="app" />
             </intent-filter>
-            <!-- Google OAuth callback. Must match Auth { scheme/host } in
-                 NetworkModule AND the Supabase Dashboard Redirect URLs. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="grace" android:host="login-callback" />
             </intent-filter>
-            <!-- Event attendance QR scan target. QR encodes
-                 grace://event-checkin/{eventId}; the system camera or any
-                 scanner app routes it back into this activity. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -79,8 +71,6 @@
                 android:resource="@xml/verse_widget_info" />
         </receiver>
 
-        <!-- WorkManager is initialized on-demand via GraceApplication
-             (Configuration.Provider); the default initializer must be removed. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -92,8 +82,6 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- Exposes the app's cache/qr/ dir as content:// URIs so Event QR
-             images can be Shared via system intents (Messenger, Print, etc.). -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
