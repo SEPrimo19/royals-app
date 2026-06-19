@@ -217,7 +217,7 @@ class LifeGroupRepositoryImpl @Inject constructor(
         return try {
             val candidates = supabase.from("users")
                 .select {
-                    filter { eq("role", "member") }
+                    filter { isIn("role", listOf("member", "council")) }
                     limit(limit.coerceAtMost(500).toLong())
                     order("name", Order.ASCENDING)
                 }
